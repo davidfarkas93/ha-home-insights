@@ -22,6 +22,9 @@ It observes:
 - Optionally, explicitly selected entity states as measured facts. These do not
   create additional threshold rules or alerts.
 
+Ignored Repairs and ignored discovery entries remain excluded; they do not become
+open incidents or unexplained gaps. Their exclusion is distinct from recovery.
+
 Open source episodes survive integration reloads and process restarts. Repeated
 observations do not create repeated discoveries. Unknown states, collection failures,
 queue overflow, storage failures and observation gaps are not successful recoveries.

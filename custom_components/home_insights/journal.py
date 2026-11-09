@@ -50,6 +50,8 @@ class Journal:
             source_time TEXT, issue_id TEXT, episode TEXT, type TEXT NOT NULL,
             policy_hash TEXT NOT NULL, body TEXT NOT NULL);
           CREATE INDEX IF NOT EXISTS events_observed ON events(observed);
+          CREATE INDEX IF NOT EXISTS events_episode_observed ON events(episode, observed DESC);
+          CREATE INDEX IF NOT EXISTS episodes_open ON episodes(closed, opened DESC);
           CREATE TABLE IF NOT EXISTS entity_states(
             entity_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, body TEXT NOT NULL);
           PRAGMA user_version=1;

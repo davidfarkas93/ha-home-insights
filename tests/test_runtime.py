@@ -165,3 +165,27 @@ async def test_native_ha_stop_drains_and_closes_journal(hass):
     assert coordinator.closed
     assert coordinator.data["status"] == "stopped"
     assert coordinator.queue.empty()
+
+
+async def test_ignored_native_sources_are_not_open_errors_or_data_gaps(hass):
+    from homeassistant.config_entries import SOURCE_IGNORE
+
+    ignored = config_entry(domain="example", source=SOURCE_IGNORE)
+    hass.config_entries._entries[ignored.entry_id] = ignored
+    issue_registry.async_create_issue(
+        hass,
+        "example",
+        "ignored",
+        is_fixable=False,
+        severity=issue_registry.IssueSeverity.WARNING,
+        translation_key="ignored",
+    )
+    issue_registry.async_get(hass).async_ignore("example", "ignored", True)
+    coordinator = await running_coordinator(hass)
+    try:
+        assert coordinator.data["status"] == "recording"
+        assert coordinator.data["open_count"] == 0
+        assert adapters.integrations(hass)[0].status == "excluded"
+        assert adapters.repairs(hass)[0].status == "excluded"
+    finally:
+        await coordinator.async_close()

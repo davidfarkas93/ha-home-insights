@@ -24,14 +24,14 @@ async def hass(tmp_path) -> AsyncGenerator[HomeAssistant]:
     await instance.async_block_till_done()
 
 
-def config_entry(domain="home_insights", data=None, state=None):
+def config_entry(domain="home_insights", data=None, state=None, source="user"):
     kwargs = {"state": state} if state is not None else {}
     return ConfigEntry(
         domain=domain,
         title="Home Insights" if domain == "home_insights" else "Test device",
         data=data or {},
         options={},
-        source="user",
+        source=source,
         version=1,
         minor_version=1,
         unique_id=domain,

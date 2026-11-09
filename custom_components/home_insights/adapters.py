@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from homeassistant.components import persistent_notification
+from homeassistant.config_entries import SOURCE_IGNORE
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import issue_registry
 from homeassistant.helpers.translation import async_get_translations
@@ -52,7 +53,7 @@ def repairs(hass: HomeAssistant) -> list[Observation]:
             Observation(
                 adapter="repairs",
                 source_id=f"{issue.domain}:{issue.issue_id}",
-                status="active",
+                status="excluded" if issue.dismissed_version is not None else "active",
                 fingerprint=digest([issue.domain, issue.issue_id, created]),
                 title=f"{issue.domain}: repair needed",
                 message="HA reports an open repair.",
@@ -63,6 +64,7 @@ def repairs(hass: HomeAssistant) -> list[Observation]:
                     "issue_id": issue.issue_id,
                     "translation_key": issue.translation_key,
                     "placeholders": placeholders,
+                    "ignored": issue.dismissed_version is not None,
                 },
             )
         )
@@ -118,7 +120,7 @@ def integrations(hass: HomeAssistant) -> list[Observation]:
         state = entry.state.value
         status = (
             "excluded"
-            if entry.disabled_by
+            if entry.disabled_by or entry.source == SOURCE_IGNORE
             else "active"
             if state in errors
             else "clear"
