@@ -1,0 +1,49 @@
+{
+  "title": "Home Insights",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Insights",
+        "description": "A natív HA-értesítések, javítási feladatok és integrációindítási hibák helyi naplózása. Opcionálisan további entitások állapotadatai is rögzíthetők. Ez a verzió még nem aktiválja az egyedi Luma-szabályokat vagy az AI-összefoglalót.",
+        "data": {"monitored_entities": "További rögzítendő entitásállapotok"}
+      }
+    },
+    "abort": {"already_configured": "A Home Insights már be van állítva."},
+    "error": {"self_reference": "A Home Insights nem figyelheti a saját állapotentitásait."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rögzítendő entitásállapotok",
+        "description": "A natív HA-források naplózása folyamatos. Az itt megadott további entitások mért állapotát rögzítjük; ebből nem készül új egyedi riasztás.",
+        "data": {"monitored_entities": "További rögzítendő entitásállapotok"}
+      }
+    },
+    "error": {"self_reference": "A Home Insights nem figyelheti a saját állapotentitásait."}
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Napló állapota",
+        "state": {
+          "starting": "Indulás",
+          "recording": "Naplózás folyamatban",
+          "partial": "Hiányos megfigyelés",
+          "error": "Naplózási hiba",
+          "stopped": "Leállítva"
+        }
+      },
+      "open_count": {"name": "Nyitott natív forrásepizódok"},
+      "last_observed_at": {"name": "Utolsó megfigyelés"}
+    }
+  },
+  "services": {
+    "get_daily_facts": {
+      "name": "Napi tényadatok lekérése",
+      "description": "Egy lezárult helyi naptári nap tényeinek olvasása. Alapértelmezésben a tegnapi nap. Nem hív AI-t és nem vezérel eszközt. A privát naplót adminisztrátor és natív automatizálás kérdezheti le.",
+      "fields": {
+        "date": {"name": "Dátum", "description": "Lezárult nap a HA beállított időzónájában."}
+      }
+    }
+  }
+}

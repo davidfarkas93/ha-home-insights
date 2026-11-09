@@ -1,0 +1,1 @@
+"""Home Insights tests."""

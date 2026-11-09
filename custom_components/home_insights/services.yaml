@@ -1,0 +1,7 @@
+get_daily_facts:
+  fields:
+    date:
+      required: false
+      example: "2026-11-08"
+      selector:
+        date:
