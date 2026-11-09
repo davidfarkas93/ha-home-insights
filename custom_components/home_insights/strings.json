@@ -5,21 +5,31 @@
       "user": {
         "title": "Home Insights",
         "description": "Record native HA notifications, Repairs and integration setup errors locally. Optionally select entities whose state facts should also be recorded. Custom Luma rules and AI summaries are not activated in this version.",
-        "data": {"monitored_entities": "Additional entity state facts"}
+        "data": {
+          "monitored_entities": "Additional entity state facts"
+        }
       }
     },
-    "abort": {"already_configured": "Home Insights is already configured."},
-    "error": {"self_reference": "Home Insights cannot monitor its own status entities."}
+    "abort": {
+      "already_configured": "Home Insights is already configured."
+    },
+    "error": {
+      "self_reference": "Home Insights cannot monitor its own status entities."
+    }
   },
   "options": {
     "step": {
       "init": {
         "title": "Recorded entity state facts",
         "description": "Native HA sources are always recorded. These additional entities record measured state facts without creating custom alerts.",
-        "data": {"monitored_entities": "Additional entity state facts"}
+        "data": {
+          "monitored_entities": "Additional entity state facts"
+        }
       }
     },
-    "error": {"self_reference": "Home Insights cannot monitor its own status entities."}
+    "error": {
+      "self_reference": "Home Insights cannot monitor its own status entities."
+    }
   },
   "entity": {
     "sensor": {
@@ -33,8 +43,12 @@
           "stopped": "Stopped"
         }
       },
-      "open_count": {"name": "Open native source episodes"},
-      "last_observed_at": {"name": "Last observation"}
+      "open_count": {
+        "name": "Open native source episodes"
+      },
+      "last_observed_at": {
+        "name": "Last observation"
+      }
     }
   },
   "services": {
@@ -42,7 +56,25 @@
       "name": "Get daily facts",
       "description": "Read facts for a completed local calendar day. Defaults to yesterday. This action does not call AI or control devices. Admin users and native automations may request the private journal data.",
       "fields": {
-        "date": {"name": "Date", "description": "A completed date in the configured HA timezone."}
+        "date": {
+          "name": "Date",
+          "description": "A completed date in the configured HA timezone."
+        }
+      }
+    },
+    "set_attention_policy": {
+      "name": "Set attention policy",
+      "description": "Import validated attention policy metadata; requires the current hash to replace an existing policy.",
+      "fields": {
+        "policy_id": {
+          "name": "policy_id"
+        },
+        "policy": {
+          "name": "policy"
+        },
+        "expected_hash": {
+          "name": "expected_hash"
+        }
       }
     }
   }

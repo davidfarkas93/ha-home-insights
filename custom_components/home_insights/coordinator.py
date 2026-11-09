@@ -21,6 +21,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.start import async_at_started
 
 from . import adapters
+from .attention_runtime import AttentionRuntime
 from .const import DOMAIN, HEARTBEAT_SECONDS, QUEUE_LIMIT
 from .journal import Journal
 from .models import previous_day
@@ -51,11 +52,13 @@ class Coordinator:
         self.overflow_at: float | None = None
         self.worker: asyncio.Task | None = None
         self.journal: Journal | None = None
+        self.attention = AttentionRuntime(self)
 
     async def execute(self, function, *args):
         return await self.hass.loop.run_in_executor(self.pool, partial(function, *args))
 
     async def async_setup(self) -> None:
+        await self.attention.load()
         policy = {
             "version": 1,
             "revision": "native-observers.1",
@@ -117,6 +120,7 @@ class Coordinator:
                 async_track_state_change_event(self.hass, self.entities, self._entity_changed)
             )
         self._watch_entries()
+        self.attention.start()
         self.enqueue("resync")
 
     @callback
@@ -180,6 +184,7 @@ class Coordinator:
         self._integrations_changed()
         self._repairs_changed(None)
         self.enqueue("checkpoint")
+        self.attention.tick()
 
     async def _resync(self) -> None:
         """Re-establish baselines without guessing any missed transitions."""
@@ -203,11 +208,14 @@ class Coordinator:
         for adapter, rows in captured:
             if rows is None:
                 await self.execute(self.journal.source_failure, adapter, "adapter_read_failed", now)
+                self.attention.native(adapter, [], error=True)
             else:
                 await self._apply_batch(adapter, rows, now)
         for entity, fact in entity_facts:
             await self.execute(self.journal.entity, entity, fact, now)
         await self.execute(self.journal.checkpoint, time.time())
+        self.attention.capture()
+        self.attention.queue()
         self.data = await self.execute(self.journal.snapshot)
         self._notify()
 
@@ -215,6 +223,7 @@ class Coordinator:
         if adapter == "repairs":
             rows = await adapters.translate_repairs(self.hass, rows)
         await self.execute(self.journal.batch, adapter, rows, now)
+        self.attention.native(adapter, rows)
 
     async def _run(self) -> None:
         while True:
@@ -228,6 +237,7 @@ class Coordinator:
                         self.journal.gap, reason, self.failure_at or self.overflow_at
                     )
                     self.overflow_at = None
+                    self.attention.resumed.clear()
                     while not self.queue.empty():
                         self.queue.get_nowait()
                         self.queue.task_done()
@@ -238,8 +248,13 @@ class Coordinator:
                     continue
                 if kind == "batch":
                     await self._apply_batch(*payload, at)
+                    self.attention.queue()
                 elif kind == "failure":
                     await self.execute(self.journal.source_failure, *payload, at)
+                    self.attention.native(payload[0], [], error=True)
+                    self.attention.queue()
+                elif kind == "attention":
+                    await self.attention.evaluate(payload)
                 elif kind == "entity":
                     await self.execute(self.journal.entity, *payload, at)
                 elif kind == "resync":
@@ -295,6 +310,7 @@ class Coordinator:
         if self.closed:
             return
         self.closed = True
+        await self.attention.close()
         for remover in [*self.removers, *self.entry_watchers.values()]:
             remover()
         self.removers.clear()

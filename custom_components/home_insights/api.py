@@ -52,7 +52,30 @@ async def async_setup(hass: HomeAssistant) -> None:
         schema=vol.Schema({vol.Optional("date"): cv.string}),
         supports_response=SupportsResponse.ONLY,
     )
-    for command in (ws_snapshot, ws_history, ws_daily_facts):
+
+    async def set_attention_policy(call):
+        await _require_admin(hass, call)
+        try:
+            return await coordinator(hass).attention.set_policy(
+                call.data["policy_id"], call.data["policy"], call.data.get("expected_hash")
+            )
+        except ValueError as error:
+            raise HomeAssistantError(str(error)) from error
+
+    hass.services.async_register(
+        DOMAIN,
+        "set_attention_policy",
+        set_attention_policy,
+        schema=vol.Schema(
+            {
+                vol.Required("policy_id"): cv.string,
+                vol.Required("policy"): dict,
+                vol.Optional("expected_hash"): cv.string,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+    for command in (ws_snapshot, ws_history, ws_daily_facts, ws_attention):
         websocket_api.async_register_command(hass, command)
 
 
@@ -95,5 +118,27 @@ async def ws_daily_facts(hass, connection, msg):
         result = await coordinator(hass).async_daily_facts(day)
     except (ValueError, RuntimeError) as error:
         connection.send_error(msg["id"], "invalid_request", str(error))
+    else:
+        connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "home_insights/attention",
+        vol.Required("policy_id"): str,
+        vol.Optional("language", default="en"): vol.In(["en", "hu"]),
+        vol.Optional("debug", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_attention(hass, connection, msg):
+    if connection.user is None or msg["debug"] and not connection.user.is_admin:
+        raise Unauthorized()
+    try:
+        result = await coordinator(hass).attention.read(
+            msg["policy_id"], msg["language"], connection.user, msg["debug"]
+        )
+    except ValueError as error:
+        connection.send_error(msg["id"], "attention_unavailable", str(error))
     else:
         connection.send_result(msg["id"], result)

@@ -97,6 +97,8 @@ class Journal:
         body: dict[str, Any],
         observation: Observation | None = None,
         episode: str | None = None,
+        *,
+        policy_hash: str | None = None,
     ) -> None:
         self.db.execute(
             "INSERT INTO events(id,observed,source_time,issue_id,episode,type,policy_hash,body) "
@@ -108,7 +110,7 @@ class Journal:
                 observation.issue_id if observation else None,
                 episode,
                 kind,
-                self.policy_hash,
+                policy_hash or self.policy_hash,
                 canonical(body),
             ),
         )

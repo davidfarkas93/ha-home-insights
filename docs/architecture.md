@@ -1,5 +1,27 @@
 # Architecture and migration
 
+## v0.2 policy authority
+
+Validated v1 policies now live in an integration-owned HA Store. The Python evaluator
+owns conditions, metadata readiness, household proof validation, stronger rule
+selection and explicit plant task/channel correlation. Luma consumes evaluated
+source rows and handles presentation grouping and confirmed manual actions.
+
+Policy episodes use separate SQLite tables from raw native source evidence. Their
+UUIDs and recurrence keys survive reloads. Events carry policy hashes and household
+revisions. Incomplete snapshots cannot clear missing sources. The daily AI pipeline
+must use the canonical policy layer without adding duplicate native evidence counts.
+
+The existing household evaluator remains authoritative during migration. Its loaded
+script body is checked before each call: only variables and stop/response actions
+are accepted. This is an internal read-only computation, not an AI tool or a generic
+script endpoint. Storage failures and queue loss re-establish observation baselines.
+
+Ordinary authenticated attention clients are filtered by HA entity read permissions.
+Raw journal/debug endpoints remain administrator-only. Backend-bound Luma policies
+cannot fall back to browser evaluation. Standalone Luma installations retain their
+separate compatibility mode. Live comparison data stays in the private HA workspace.
+
 ## Target ownership
 
 Home Insights owns backend observations, persistent source/incident episodes,

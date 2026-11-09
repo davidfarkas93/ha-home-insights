@@ -14,9 +14,9 @@ from custom_components.home_insights.coordinator import Coordinator
 from .conftest import config_entry
 
 
-async def running_coordinator(hass, entities=None):
+async def running_coordinator(hass, entities=None, entry=None):
     hass.set_state(CoreState.running)
-    entry = config_entry(data={"monitored_entities": entities or []})
+    entry = entry or config_entry(data={"monitored_entities": entities or []})
     coordinator = Coordinator(hass, entry)
     entry.runtime_data = coordinator
     await coordinator.async_setup()

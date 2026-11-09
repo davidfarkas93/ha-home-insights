@@ -1,3 +1,17 @@
+set_attention_policy:
+  fields:
+    policy_id:
+      required: true
+      selector:
+        text:
+    policy:
+      required: true
+      selector:
+        object:
+    expected_hash:
+      required: false
+      selector:
+        text:
 get_daily_facts:
   fields:
     date:

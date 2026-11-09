@@ -19,7 +19,8 @@ AI receives explicit facts with no device/configuration/firmware tools.
 
 Luma is the presentation layer. Do not create a permanent second implementation
 of Luma's custom rule evaluator. Porting those rules requires contract tests and
-an explicit authoritative-backend cutover; v0.1 does not perform that cutover.
+an explicit authoritative-backend cutover. The v0.2 attention contract has a frozen
+TypeScript oracle; keep backend-bound clients on server results without a fallback.
 
 Before committing: `uv run ruff check .`, `uv run ruff format --check .`,
 `uv run pytest`, and `uv run python scripts/package.py`.

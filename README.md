@@ -4,9 +4,44 @@ Persistent incident-source tracking and daily facts inside Home Assistant.
 The project is building toward household context, AI-assisted morning summaries
 and Luma dashboard integration.
 
-**v0.1 is the native observation journal foundation.** It does not yet replace
-Luma's custom rules, household-context evaluator or the existing daily report.
-Installing it does not enable an AI provider or change any dashboard or automation.
+**v0.2 adds the authoritative Luma attention policy evaluator.** Import a policy
+explicitly, then bind a compatible Luma frontend to its ID. The integration observes
+its source entities without a browser and journals stable policy episodes separately
+from native source evidence. Installing alone changes no dashboard or automation.
+It does not enable an AI provider or replace the existing daily-report automation.
+
+## Shared Luma policies
+
+The response-only administrator action `home_insights.set_attention_policy` accepts
+`policy_id` and a v1 JSON `policy`. Replacing an existing policy also requires its
+current `expected_hash`. Policy files use HA's native Store and are integration-owned.
+Configuration contains selectors and inert UI action bindings; the backend never
+executes a completion/update binding. Unknown fields and incompatible policy shapes
+are refused. Concurrent policy writes are serialized.
+
+`home_insights/attention` takes `policy_id` and `language` (`hu` or `en`). It returns
+individual evaluated rows, policy revision/hash, observation time and presentation
+metadata. Normal authenticated users receive only results permitted by their HA
+entity read access. Raw journal/history APIs remain administrator-only. The optional
+`debug` projection is administrator-only and contains private household input data;
+never publish it or include it in Git.
+
+Backend-bound Luma clients group and render these rows, retaining inline update
+confirmation and plant task controls. They do not evaluate a second set of conditions
+or silently fall back to the browser when the backend is unavailable. Observation
+freshness is explicit. The v1 Python evaluator is verified against 34 synthetic
+cases from Luma's frozen TypeScript contract, including HU/EN formatting.
+
+Existing approved household knowledge can remain in its shared HA evaluator during
+migration. Before every invocation, its script must consist solely of variables and
+a stop/response; device/service/event/parallel/delay actions are refused. Its proof
+revision, source observations and expiry are still checked before an exclusion can
+apply. A real active fault always takes priority over a missing-data exception.
+
+The existing daily facts action still reports its explicitly stated native-source
+scope. Canonical attention events carry policy IDs and are available in the journal;
+the dedicated retrospective/report pipeline is a subsequent stage. Native evidence
+counts must not be added to canonical policy episode counts as if they were new issues.
 
 ## What runs, and where?
 
