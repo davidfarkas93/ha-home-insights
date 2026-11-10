@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Home Insights",
-        "description": "A natív HA-értesítések, javítási feladatok és integrációindítási hibák helyi naplózása. Opcionálisan további entitások állapotadatai is rögzíthetők. Ez a verzió még nem aktiválja az egyedi Luma-szabályokat vagy az AI-összefoglalót.",
+        "description": "Natív HA-jelzések, Repairs és integrációindítási hibák helyi naplózása. További mérési entitások választhatók. A Luma-szabályok külön importálással köthetők be; az AI-jelentés külön beállítást igényel.",
         "data": {
           "monitored_entities": "További rögzítendő entitásállapotok"
         }
@@ -59,6 +59,10 @@
         "date": {
           "name": "Dátum",
           "description": "Lezárult nap a HA beállított időzónájában."
+        },
+        "policy_id": {
+          "name": "Szabálykészlet azonosítója",
+          "description": "Megadva a kanonikus jelzési tényadatokat adja. Nélküle a korábbi natív forrásréteget olvassa; a két számlálás nem adható össze."
         }
       }
     },

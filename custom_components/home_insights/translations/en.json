@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Home Insights",
-        "description": "Record native HA notifications, Repairs and integration setup errors locally. Optionally select entities whose state facts should also be recorded. Custom Luma rules and AI summaries are not activated in this version.",
+        "description": "Record native HA notifications, Repairs and integration setup errors locally. Optionally select additional measured entity facts. Luma policies require an explicit import; AI reports are configured separately.",
         "data": {
           "monitored_entities": "Additional entity state facts"
         }
@@ -59,6 +59,10 @@
         "date": {
           "name": "Date",
           "description": "A completed date in the configured HA timezone."
+        },
+        "policy_id": {
+          "name": "Policy ID",
+          "description": "Selects canonical policy facts. Omit for legacy native-source facts; these counts must not be added together."
         }
       }
     },

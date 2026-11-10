@@ -14,6 +14,11 @@ set_attention_policy:
         text:
 get_daily_facts:
   fields:
+    policy_id:
+      required: false
+      example: "home"
+      selector:
+        text:
     date:
       required: false
       example: "2026-11-08"

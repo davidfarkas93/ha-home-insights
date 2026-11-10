@@ -38,10 +38,37 @@ a stop/response; device/service/event/parallel/delay actions are refused. Its pr
 revision, source observations and expiry are still checked before an exclusion can
 apply. A real active fault always takes priority over a missing-data exception.
 
-The existing daily facts action still reports its explicitly stated native-source
-scope. Canonical attention events carry policy IDs and are available in the journal;
-the dedicated retrospective/report pipeline is a subsequent stage. Native evidence
-counts must not be added to canonical policy episode counts as if they were new issues.
+**v0.3 adds canonical daily facts and audited handling.** Pass `policy_id` to
+`home_insights.get_daily_facts` or `home_insights/daily_facts` for schema v2 policy
+facts. Omitting it preserves the legacy native-source result. These are separate
+scopes: never add native evidence counts to canonical episode counts.
+
+Canonical facts separate issues, maintenance updates and informational events.
+They distinguish carried episodes, first observation, detected recurrence,
+observed clearance, channel removal and exclusion. Brief pending/inactive changes
+are not faults. Coverage is clipped to policy adoption, observer runs and known
+source gaps. Confirmed active seconds cover only known complete observation;
+episode elapsed time is not a physical failure-duration estimate. Calendar days
+follow HA's timezone, including 23/25-hour DST days.
+
+Evidence, handling state, policy revisions and household definitions are queried
+as of that day's end; tomorrow's edits cannot rewrite yesterday's interpretation.
+Output is bounded with explicit truncation flags and incidents before update floods.
+Per-source availability intervals and household definition snapshots start when
+v0.3 observes them; earlier details are explicitly unavailable, not backfilled.
+
+Luma 0.49 uses `home_insights/record_handling` for seen, claimed-fixed, note,
+snooze and unsnooze metadata. Requests are atomic across 1–100 exact episode targets,
+with per-episode revisions and actor-scoped idempotency keys. Actor identity comes
+from the authenticated HA user. Records survive reload/restart and never close a
+source episode. A recurrence has a fresh UUID and fresh handling state. Critical
+or non-dismissible sources cannot be snoozed.
+
+`home_insights/episode` exposes bounded, cursor-paginated, plain-text event history.
+Entity sources require HA read permission; writing handling additionally requires
+control permission. Non-entity native channels require an administrator. Raw linked
+source context is not exposed through this history projection. These APIs have no
+device or configuration actions. The morning AI/report pipeline is still separate.
 
 ## What runs, and where?
 
@@ -99,12 +126,14 @@ Read-only WebSocket commands:
 | --- | --- | --- |
 | `home_insights/snapshot` | none | Current observation health and bounded open episodes |
 | `home_insights/history` | `limit` 1–100; optional `before` sequence | Cursor-paginated events |
-| `home_insights/daily_facts` | optional `date` (`YYYY-MM-DD`) | Completed-day facts |
+| `home_insights/daily_facts` | optional `date` (`YYYY-MM-DD`), `policy_id` | Completed-day facts; policy selects canonical schema v2 |
+| `home_insights/episode` | `policy_id`, `episode_id`, optional `before`, `limit` | Authorized episode and handling history |
 
-In v0.1, these private journal APIs require an administrator. The action also allows
+Raw snapshot/history and daily facts require an administrator. The action also allows
 native HA automations with no user context. Broader frontend access needs a deliberate
-permission model before Luma adopts these APIs; a normal user's entity visibility
-must not be bypassed through a household-wide journal endpoint.
+permission model; a normal user's entity visibility must not be bypassed through
+a household-wide journal endpoint. The filtered episode projection above has its
+own entity authorization and does not grant access to raw journal endpoints.
 
 Daily results distinguish:
 

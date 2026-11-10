@@ -24,6 +24,15 @@ separate compatibility mode. Live comparison data stays in the private HA worksp
 
 ## Target ownership
 
+v0.3 provides canonical completed-day facts and a separate user handling ledger.
+Facts clip coverage to adoption/runs/gaps, separate incidents from updates/events,
+and read evidence/metadata strictly before the next local midnight. Metadata never
+changes source truth. Multi-target handling is transactional, revision-checked and
+idempotent; actor identity is supplied only by HA authentication. Entity read and
+control permissions govern history and writes respectively; non-entity channels
+remain administrator-only. Availability/context detail begins with v0.3 observation.
+The next report pipeline must use this canonical scope and retain missing-data states.
+
 Home Insights owns backend observations, persistent source/incident episodes,
 coverage, approved household context, deterministic measurements and report data.
 Luma owns presentation and the associated metadata workflows. Native HA automations

@@ -61,6 +61,37 @@ async def test_websocket_read_api_requires_admin(hass):
     assert not connection.send_result.called
 
 
+async def test_canonical_daily_action_is_read_only_and_unknown_policy_rejected(hass):
+    coordinator = await running_coordinator(hass)
+    try:
+        await coordinator.attention.set_policy(
+            "example", {"version": 1, "revision": "test.1", "rules": []}
+        )
+        await api.async_setup(hass)
+        with patch.object(api, "coordinator", return_value=coordinator):
+            before = (await coordinator.async_history())["events"]
+            result = await hass.services.async_call(
+                "home_insights",
+                "get_daily_facts",
+                {"policy_id": "example", "date": "2020-01-01"},
+                blocking=True,
+                return_response=True,
+            )
+            assert result["schema_version"] == 2 and result["assessment"] == "not_run"
+            assert result["scope"] == "canonical_attention_policy"
+            assert (await coordinator.async_history())["events"] == before
+            with pytest.raises(HomeAssistantError, match="Unknown attention policy"):
+                await hass.services.async_call(
+                    "home_insights",
+                    "get_daily_facts",
+                    {"policy_id": "unknown"},
+                    blocking=True,
+                    return_response=True,
+                )
+    finally:
+        await coordinator.async_close()
+
+
 def test_only_completed_calendar_dates_allowed():
     assert api.requested_day("2020-01-01", "Europe/Budapest") == date(2020, 1, 1)
     assert api.requested_day(None, "Europe/Budapest") is None

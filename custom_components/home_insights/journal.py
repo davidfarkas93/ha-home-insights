@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .handling import setup_storage
 from .models import Observation, canonical, daily_window, digest, iso
 
 SOURCE_REMOVALS = {
@@ -56,6 +57,7 @@ class Journal:
             entity_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, body TEXT NOT NULL);
           PRAGMA user_version=1;
         """)
+        setup_storage(self.db)
         self.run_id = str(uuid4())
         self.policy_hash = digest(policy)
         self.baselines: set[str] = set()

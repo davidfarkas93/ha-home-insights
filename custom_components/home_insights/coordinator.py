@@ -23,6 +23,7 @@ from homeassistant.helpers.start import async_at_started
 from . import adapters
 from .attention_runtime import AttentionRuntime
 from .const import DOMAIN, HEARTBEAT_SECONDS, QUEUE_LIMIT
+from .daily_attention import daily_attention
 from .journal import Journal
 from .models import previous_day
 
@@ -294,11 +295,21 @@ class Coordinator:
         await self.async_flush()
         return await self.execute(self.journal.history, before, limit)
 
-    async def async_daily_facts(self, day: date | None = None):
+    async def async_daily_facts(self, day: date | None = None, policy_id: str | None = None):
         await self.async_flush()
         if self.failed or self.closed or not self.started:
             raise RuntimeError("Journal is not recording")
         zone = self.hass.config.time_zone
+        if policy_id is not None:
+            if policy_id not in self.attention.policies:
+                raise ValueError("Unknown attention policy")
+            return await self.execute(
+                daily_attention,
+                self.journal,
+                policy_id,
+                day or previous_day(time.time(), zone),
+                zone,
+            )
         return await self.execute(
             self.journal.daily_facts, day or previous_day(time.time(), zone), zone
         )

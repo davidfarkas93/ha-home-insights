@@ -4,6 +4,7 @@ import json
 from uuid import uuid4
 
 from .attention import attention_hash
+from .handling import context_observed, record_quality
 from .models import Observation, canonical, digest
 
 
@@ -17,23 +18,22 @@ def record_attention(
     complete=True,
     source_times=None,
     household_revision=None,
+    household_snapshot=None,
 ):
     db = journal.db
-    db.executescript("""
-      CREATE TABLE IF NOT EXISTS attention_rows(
-        policy TEXT NOT NULL, id TEXT NOT NULL, status TEXT NOT NULL, episode TEXT,
-        base_key TEXT NOT NULL, key TEXT NOT NULL, body TEXT NOT NULL,
-        PRIMARY KEY(policy,id));
-      CREATE TABLE IF NOT EXISTS attention_episodes(
-        id TEXT PRIMARY KEY, policy TEXT NOT NULL, row_id TEXT NOT NULL, opened REAL NOT NULL,
-        closed REAL, close_reason TEXT, initial INTEGER NOT NULL, body TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS attention_open ON attention_episodes(policy,closed);
-    """)
     policy_hash = digest(policy)
     with db:
-        if db.execute(
+        record_quality(db, policy_id, rows, now, complete)
+        context_observed(journal, policy_id, household_snapshot, now)
+        db.execute(
             "INSERT OR IGNORE INTO policies VALUES(?,?,?)", (policy_hash, now, canonical(policy))
-        ).rowcount:
+        )
+        previous_policy = db.execute(
+            "SELECT policy_hash FROM events WHERE type='attention_policy_observed' "
+            "AND json_extract(body,'$.policy_id')=? ORDER BY seq DESC LIMIT 1",
+            (policy_id,),
+        ).fetchone()
+        if previous_policy is None or previous_policy[0] != policy_hash:
             journal._event(
                 "attention_policy_observed",
                 now,

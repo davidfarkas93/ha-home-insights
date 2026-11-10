@@ -4,8 +4,9 @@ import asyncio
 import time
 from copy import deepcopy
 
-from homeassistant.auth.permissions.const import POLICY_READ
+from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.core import callback
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import TrackStates, async_track_state_change_filtered
 from homeassistant.helpers.storage import Store
@@ -13,6 +14,7 @@ from homeassistant.helpers.translation import async_get_translations
 
 from .attention import attention_snapshot, source_ids
 from .attention_journal import record_attention
+from .handling import episode_detail, project_handling, record_handling, validate_request
 from .models import digest
 from .policy import presentation, validate_policy
 
@@ -380,6 +382,11 @@ class AttentionRuntime:
                 complete,
                 {source: entity.get("last_changed") for source, entity in inputs["states"].items()},
                 (external.get("household") or {}).get("revision"),
+                inputs["states"]
+                .get(policy.get("household", {}).get("entity"), {})
+                .get("attributes")
+                if policy.get("household")
+                else None,
             )
             self.resumed.add(name)
             self.results[name] = {
@@ -440,7 +447,23 @@ class AttentionRuntime:
                 row["key"] = old["key"]
                 if old.get("episodeId"):
                     row["episodeId"] = old["episodeId"]
-        result = {**self.results[name], "rows": rows, "policy": presentation(policy)}
+        rows = await self.owner.execute(project_handling, self.owner.journal.db, rows, now / 1000)
+        for row in rows:
+            row["canHandle"] = bool(
+                row.get("episodeId")
+                and user is not None
+                and (
+                    user.is_admin
+                    or self.hass.states.get(row["source"]) is not None
+                    and user.permissions.check_entity(row["source"], POLICY_CONTROL)
+                )
+            )
+        result = {
+            **self.results[name],
+            "rows": rows,
+            "policy": presentation(policy),
+            "capabilities": {"handling": True},
+        }
         if debug and user is not None and user.is_admin:
             result["contract_input"] = {
                 "states": states,
@@ -450,6 +473,41 @@ class AttentionRuntime:
                 "now": now,
                 "language": language,
             }
+        return result
+
+    async def episode(self, policy, episode, user, before=None, limit=20, control=False):
+        await self.owner.async_flush()
+        if self.owner.failed or self.owner.closed:
+            raise ValueError("Attention backend is not ready")
+        result = await self.owner.execute(
+            episode_detail, self.owner.journal.db, policy, episode, before, limit
+        )
+        permission = POLICY_CONTROL if control else POLICY_READ
+        if user is None or not (
+            user.is_admin
+            or self.hass.states.get(result["source"]) is not None
+            and user.permissions.check_entity(result["source"], permission)
+        ):
+            raise Unauthorized()
+        return result
+
+    async def handle(self, value, user):
+        if user is None:
+            raise Unauthorized()
+        validate_request(value, time.time(), retry=True)
+        # Authorize even idempotent retries against the actual stored episode.
+        for target in value.get("targets", []):
+            await self.episode(value["policy_id"], target["episode_id"], user, control=True)
+        result = await self.owner.execute(
+            record_handling,
+            self.owner.journal,
+            value,
+            user.id,
+            user.name or "Home Assistant user",
+            time.time(),
+        )
+        self.owner.data = await self.owner.execute(self.owner.journal.snapshot)
+        self.owner._notify()
         return result
 
     async def close(self):

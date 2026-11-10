@@ -1,8 +1,10 @@
 """Policy import persistence, canonical episodes, permissions and native HA changes."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.exceptions import Unauthorized
 
 from custom_components.home_insights.models import digest
 
@@ -82,5 +84,60 @@ async def test_invalid_import_does_not_replace_valid_policy(hass):
                 "example", {**POLICY, "execute": "shell"}, digest(POLICY)
             )
         assert coordinator.attention.policies["example"] == POLICY
+    finally:
+        await coordinator.async_close()
+
+
+async def test_metadata_is_audited_authorized_and_never_calls_source_services(hass):
+    hass.states.async_set("sensor.temperature", "44")
+    coordinator = await running_coordinator(hass)
+    admin = SimpleNamespace(id="real-user", name="Real User", is_admin=True)
+    try:
+        await coordinator.attention.set_policy("example", POLICY)
+        first = await coordinator.attention.read("example", user=admin)
+        active = next(r for r in first["rows"] if r["rule"] == "warm")
+        value = {
+            "policy_id": "example",
+            "request_id": "test",
+            "operation": "claimed_fixed",
+            "targets": [
+                {"row_id": active["id"], "episode_id": active["episodeId"], "expected_revision": 0}
+            ],
+            "note": "Checked the wiring",
+        }
+        assert active["canHandle"]
+        with patch.object(type(hass.services), "async_call", new_callable=AsyncMock) as services:
+            assert (await coordinator.attention.handle(value, admin))["ok"]
+            services.assert_not_called()
+        after = await coordinator.attention.read("example", user=admin)
+        current = next(r for r in after["rows"] if r["rule"] == "warm")
+        assert current["status"] == "active" and current["handling"]["claimed_fixed_at"]
+        detail = await coordinator.attention.episode("example", active["episodeId"], admin)
+        assert detail["events"][0]["actor_name"] == "Real User"
+        assert detail["events"][0]["note"] == "Checked the wiring"
+        readonly = SimpleNamespace(
+            id="reader",
+            name="Reader",
+            is_admin=False,
+            permissions=SimpleNamespace(
+                check_entity=lambda entity, permission: (
+                    entity == "sensor.temperature" and permission == "read"
+                )
+            ),
+        )
+        visible = await coordinator.attention.read("example", user=readonly)
+        assert not next(r for r in visible["rows"] if r["rule"] == "warm")["canHandle"]
+        assert (await coordinator.attention.episode("example", active["episodeId"], readonly))[
+            "episode_id"
+        ] == active["episodeId"]
+        with pytest.raises(Unauthorized):
+            await coordinator.attention.handle({**value, "request_id": "reader"}, readonly)
+        denied = SimpleNamespace(
+            is_admin=False, permissions=SimpleNamespace(check_entity=lambda *_: False)
+        )
+        with pytest.raises(Unauthorized):
+            await coordinator.attention.episode("example", active["episodeId"], denied)
+        with pytest.raises(Unauthorized):
+            await coordinator.attention.episode("example", active["episodeId"], None)
     finally:
         await coordinator.async_close()
