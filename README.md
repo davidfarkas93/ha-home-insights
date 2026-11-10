@@ -107,7 +107,55 @@ inferred. AI prioritizes constrained combinations of short, HA-verified statemen
 native output schema enumerates only those valid summaries; citations and a known
 measurement-bound check are derived from the selected statements. This prevents
 free prose from changing a median to a mean, inventing a cause, or citing unrelated
-measurements. Heating and NAS measurements remain future scopes.
+measurements. NAS measurements remain a future scope.
+
+## Heating morning reports (v0.6)
+
+`home_insights.set_heating_profile` explicitly binds four distinct `binary_sensor`
+sources under `sources.flame`, `heating`, `dhw` and `connectivity`. The version-1
+profile also requires `revision`. Optional `short_burn_seconds` (default 180),
+`minimum_short_cycles` (default 3) and `mode_edge_seconds` (default 2) are review
+heuristics, not manufacturer fault limits. Profile replacement requires the current
+hash from administrator-only `home_insights/heating_profile`; configuration lives
+in native HA Store. No thermostat, boiler setting or device is changed.
+
+`home_insights.get_heating_facts` reads `profile_id` and an optional completed local
+`date`. `home_insights.generate_heating_report` additionally takes `ai_task_entity`
+and optional `force`. Native HA owns the morning time trigger. Luma 0.52's existing
+report card accepts `heating_profile` instead of `policy` or `energy_profile`;
+`home_insights/report` uses the same mutually exclusive selector. Separate `heating:`
+keys isolate attempt/cache/success from energy and attention reports. All private
+facts/profile APIs require an administrator; native automations may run reports.
+
+Flame feedback, a connected bus and trusted Recorder run intervals establish
+observation. Room heat demand is never substituted for burner operation. History
+reads use the native Recorder history API on its executor. One fixed, read-only,
+version-pinned ORM query of `RecorderRuns` prevents carrying states through HA
+downtime. Incorrectly closed runs are conservatively untrusted. There is no raw SQL,
+arbitrary query endpoint, new database client or external process. One-day lookback
+can establish a carried cycle's beginning; no post-midnight future data is read.
+State/Recorder gaps break cycles; recovery while already firing is not an ignition.
+Restored/unknown states cannot establish a clean result. Input/run/sample budgets
+are bounded, and partial coverage stays explicit without rounding it up to 100%.
+
+The report separates observed ignitions, observed firing duration, full heating
+burn lengths and identified short heating burns. Counts/duration are lower bounds
+when burner observation is incomplete. Duration statistics use only fully observed
+burns that end during the examined day; a burn may have started the previous day.
+Unknown starts, interruptions and still-firing day-end fragments remain separate.
+CH/DHW feedback attributes each full burn to heating, hot water, mixed or unclassified.
+Only known inactive mode edges within the configured margin may be ignored;
+unknown modes and any opposite/mixed mode prevent pure-heating classification.
+Hot-water/mixed/unclassified burns never inflate the short-heating count. A short
+burn is strictly below the configured duration; repeated eligible burns trigger
+a review finding. With no complete heating burns, length/short count is unknown,
+not a fabricated zero. No gas use, delivered heat or room comfort is inferred.
+
+The AI selects up to two measured statements through the same constrained native
+output schema as energy. The backend attaches citations/checks and a deterministic
+partial-observation prefix. Confirmed short burns can still be shown alongside an
+insufficient-data assessment; the missing intervals may hide additional starts.
+The task receives no HA/MCP, configuration, firmware, shell or provider tools.
 
 ## Shared Luma policies
 
@@ -194,7 +242,7 @@ underlying problem was fixed, seen or delivered to a phone.
 
 ## Installation
 
-Requires **Home Assistant Core 2026.11.0 or newer**; currently tested on 2026.11.0.
+Requires **Home Assistant Core 2026.11.0 or newer**; currently tested on 2026.11.1 (also verified on 2026.11.0).
 Compatibility with later versions is not assumed by the version requirement.
 
 Add `https://github.com/davidfarkas93/ha-home-insights` as a HACS/Marketplace custom
@@ -288,7 +336,7 @@ uv run pytest
 uv run python scripts/package.py
 ```
 
-The lockfile pins the test environment to actual HA 2026.11.0. Tests exercise Core's
+The lockfile pins the test environment to actual HA 2026.11.1. Tests exercise Core's
 configuration flow, sensor creation, reload/unload, native events, disk failure,
 bounded-queue loss, source recovery, permissions, persistence, pagination and DST.
 They do not connect to a production HA instance or operate real devices.

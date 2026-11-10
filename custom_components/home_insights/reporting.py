@@ -9,13 +9,15 @@ from zoneinfo import ZoneInfo
 
 import probatio as vol
 
-from . import energy_reporting, report_store
+from . import energy_reporting, heating_reporting, report_store
 from .models import canonical, previous_day
 
 TIMEOUT = 120
 
 
 def output_schema(bundle):
+    if bundle.get("scope") == "heating_cycles":
+        return heating_reporting.output_schema(bundle)
     if bundle.get("scope") == "energy_statistics":
         return energy_reporting.output_schema(bundle)
     return vol.Schema(
@@ -38,6 +40,8 @@ def clean_text(value, limit=500):
 
 
 def evidence_bundle(facts):
+    if facts.get("scope") == "heating_cycles":
+        return heating_reporting.evidence_bundle(facts)
     if facts.get("scope") == "energy_statistics":
         return energy_reporting.evidence_bundle(facts)
     evidence = []
@@ -150,6 +154,8 @@ def evidence_bundle(facts):
 
 
 def instructions(bundle):
+    if bundle.get("scope") == "heating_cycles":
+        return heating_reporting.instructions(bundle)
     if bundle.get("scope") == "energy_statistics":
         return energy_reporting.instructions(bundle)
     return """
@@ -187,6 +193,8 @@ HA-tényadatok:\n""" + canonical(bundle)
 
 
 def validate_narrative(value, bundle):
+    if bundle.get("scope") == "heating_cycles":
+        return heating_reporting.validate_narrative(value, bundle)
     if bundle.get("scope") == "energy_statistics":
         return energy_reporting.validate_narrative(value, bundle)
     keys = {"summary", "hypothesis", "suggested_check", "evidence_ids"}
@@ -281,7 +289,9 @@ async def summarize(hass, entity_id, bundle, context):
         hass,
         entity_id=entity_id,
         task_name=(
-            "Előző napi energiamérleg"
+            "Előző napi fűtési visszatekintés"
+            if bundle.get("scope") == "heating_cycles"
+            else "Előző napi energiamérleg"
             if bundle.get("scope") == "energy_statistics"
             else "Előző napi otthoni rendszerjelentés"
         ),
@@ -303,7 +313,12 @@ class ReportManager:
         self.owner.data = await self.owner.execute(self.owner.journal.snapshot)
         self.owner._notify()
 
-    def scope_key(self, policy, energy_profile):
+    def scope_key(self, policy, energy_profile, heating_profile=None):
+        if sum(v is not None for v in (policy, energy_profile, heating_profile)) != 1:
+            raise ValueError("Select one report scope")
+        if heating_profile is not None:
+            self.owner.heating.get_profile(heating_profile)
+            return "heating:" + heating_profile
         if energy_profile is not None:
             if policy is not None:
                 raise ValueError("Select one report scope")
@@ -313,8 +328,18 @@ class ReportManager:
             raise ValueError("Unknown attention policy")
         return policy
 
-    async def generate(self, policy, entity_id, day, context, force=False, *, energy_profile=None):
-        policy = self.scope_key(policy, energy_profile)
+    async def generate(
+        self,
+        policy,
+        entity_id,
+        day,
+        context,
+        force=False,
+        *,
+        energy_profile=None,
+        heating_profile=None,
+    ):
+        policy = self.scope_key(policy, energy_profile, heating_profile)
         if self.owner.closed or self.owner.failed or not self.owner.started:
             raise RuntimeError("Journal is not recording")
         if policy in self.policies:
@@ -340,7 +365,9 @@ class ReportManager:
             error = "collection_failed"
             try:
                 facts = (
-                    await self.owner.energy.facts(energy_profile, day)
+                    await self.owner.heating.facts(heating_profile, day)
+                    if heating_profile is not None
+                    else await self.owner.energy.facts(energy_profile, day)
                     if energy_profile is not None
                     else await self.owner.async_daily_facts(day, policy)
                 )
@@ -348,8 +375,9 @@ class ReportManager:
                 facts = {
                     **facts,
                     "ai_evidence": bundle["evidence"],
-                    "coverage_percent": round(
-                        100 * facts["coverage_seconds"] / facts["window_seconds"], 1
+                    "coverage_percent": facts.get(
+                        "coverage_percent",
+                        round(100 * facts["coverage_seconds"] / facts["window_seconds"], 1),
                     ),
                 }
                 await self.owner.execute(
@@ -433,8 +461,10 @@ class ReportManager:
             self.tasks.discard(task)
             self.policies.discard(policy)
 
-    async def read(self, policy, due_time="08:00", grace=10, *, energy_profile=None):
-        policy = self.scope_key(policy, energy_profile)
+    async def read(
+        self, policy, due_time="08:00", grace=10, *, energy_profile=None, heating_profile=None
+    ):
+        policy = self.scope_key(policy, energy_profile, heating_profile)
         if not re.fullmatch(r"\d{2}:\d{2}", due_time):
             raise ValueError("Invalid due time")
         at = day_time.fromisoformat(due_time)
@@ -459,6 +489,7 @@ class ReportManager:
             "schema_version": 1,
             "policy_id": policy,
             "energy_profile": energy_profile,
+            "heating_profile": heating_profile,
             "timezone": zone,
             "expected_day": day.isoformat(),
             "generated_at": now,

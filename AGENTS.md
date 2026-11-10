@@ -24,5 +24,5 @@ TypeScript oracle; keep backend-bound clients on server results without a fallba
 
 Before committing: `uv run ruff check .`, `uv run ruff format --check .`,
 `uv run pytest`, and `uv run python scripts/package.py`.
-Tests use HA 2026.11.0 directly and never contact the production HA or real devices.
+Tests use HA 2026.11.1 directly and never contact the production HA or real devices.
 Production installation and a Core restart are separate from a passing local test run.

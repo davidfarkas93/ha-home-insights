@@ -1,7 +1,7 @@
 """Home Insights constants."""
 
 DOMAIN = "home_insights"
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 PLATFORMS = ["sensor"]
 HEARTBEAT_SECONDS = 15
 QUEUE_LIMIT = 1024

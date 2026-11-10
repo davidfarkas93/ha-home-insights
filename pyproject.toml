@@ -1,6 +1,6 @@
 [project]
 name = "ha-home-insights"
-version = "0.5.1"
+version = "0.6.0"
 description = "Persistent observations and daily facts for Home Assistant"
 requires-python = ">=3.14.2"
 
@@ -9,7 +9,7 @@ dev = [
   "gazetteer-matcher==1.1.0",
   "hassil==3.12.1",
   "home-assistant-intents==2026.10.27",
-  "homeassistant==2026.11.0",
+  "homeassistant==2026.11.1",
   "pytest>=9.0",
   "pytest-asyncio>=1.2",
   "ruff>=0.14",

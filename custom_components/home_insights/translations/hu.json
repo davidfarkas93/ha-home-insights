@@ -143,6 +143,51 @@
           "name": "Újragenerálás"
         }
       }
+    },
+    "set_heating_profile": {
+      "name": "Fűtési profil beállítása",
+      "description": "Rögzített égő-visszajelzés, OpenTherm-elérhetőség és fűtési/melegvíz-besorolás; a rövid égés ellenőrzési szempont, nem hibadiagnózis.",
+      "fields": {
+        "profile_id": {
+          "name": "Profilazonosító"
+        },
+        "profile": {
+          "name": "Fűtési profil"
+        },
+        "expected_hash": {
+          "name": "Elvárt profilhash"
+        }
+      }
+    },
+    "get_heating_facts": {
+      "name": "Napi égőtények olvasása",
+      "description": "Rögzített égő-visszajelzés, OpenTherm-elérhetőség és fűtési/melegvíz-besorolás; a rövid égés ellenőrzési szempont, nem hibadiagnózis.",
+      "fields": {
+        "profile_id": {
+          "name": "Profilazonosító"
+        },
+        "date": {
+          "name": "Dátum"
+        }
+      }
+    },
+    "generate_heating_report": {
+      "name": "Reggeli fűtési jelentés készítése",
+      "description": "Rögzített égő-visszajelzés, OpenTherm-elérhetőség és fűtési/melegvíz-besorolás; a rövid égés ellenőrzési szempont, nem hibadiagnózis.",
+      "fields": {
+        "profile_id": {
+          "name": "Profilazonosító"
+        },
+        "ai_task_entity": {
+          "name": "Eszközök nélküli AI Task"
+        },
+        "date": {
+          "name": "Dátum"
+        },
+        "force": {
+          "name": "Újragenerálás"
+        }
+      }
     }
   }
 }

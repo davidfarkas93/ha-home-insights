@@ -143,6 +143,51 @@
           "name": "Regenerate"
         }
       }
+    },
+    "set_heating_profile": {
+      "name": "Set heating profile",
+      "description": "Recorded burner feedback, observation coverage and heating/hot-water classification. Short burns are a review heuristic, not a fault diagnosis.",
+      "fields": {
+        "profile_id": {
+          "name": "Profile ID"
+        },
+        "profile": {
+          "name": "Heating profile"
+        },
+        "expected_hash": {
+          "name": "Expected profile hash"
+        }
+      }
+    },
+    "get_heating_facts": {
+      "name": "Read daily burner facts",
+      "description": "Recorded burner feedback, observation coverage and heating/hot-water classification. Short burns are a review heuristic, not a fault diagnosis.",
+      "fields": {
+        "profile_id": {
+          "name": "Profile ID"
+        },
+        "date": {
+          "name": "Date"
+        }
+      }
+    },
+    "generate_heating_report": {
+      "name": "Generate heating morning report",
+      "description": "Recorded burner feedback, observation coverage and heating/hot-water classification. Short burns are a review heuristic, not a fault diagnosis.",
+      "fields": {
+        "profile_id": {
+          "name": "Profile ID"
+        },
+        "ai_task_entity": {
+          "name": "Tool-free AI Task"
+        },
+        "date": {
+          "name": "Date"
+        },
+        "force": {
+          "name": "Regenerate"
+        }
+      }
     }
   }
 }

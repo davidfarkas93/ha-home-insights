@@ -1,9 +1,6 @@
 """AI prioritizes measured energy statements; source citations remain deterministic."""
 
-from itertools import permutations
-
-import probatio as vol
-
+from . import interpretation
 from .models import canonical
 
 
@@ -73,15 +70,7 @@ def evidence_bundle(facts):
         else:
             continue
         checks.append({"ref": key, "text": text})
-    options = []
-    for length in (1, 2):
-        for selected in permutations(evidence, length):
-            refs = [e["ref"] for e in selected]
-            if priority and (
-                refs[0] not in priority or len(set(refs) & priority) < min(2, len(priority))
-            ):
-                continue
-            options.append({"text": " ".join(e["statement"] for e in selected), "refs": refs})
+    options = interpretation.summary_options(evidence, priority)
     return {
         "scope": "energy_statistics",
         "day": facts["day"],
@@ -96,11 +85,7 @@ def evidence_bundle(facts):
 
 
 def output_schema(bundle):
-    return vol.Schema(
-        {
-            vol.Required("summary"): vol.In([o["text"] for o in bundle["summary_options"]]),
-        }
-    )
+    return interpretation.output_schema(bundle)
 
 
 def instructions(bundle):
@@ -119,16 +104,6 @@ HA-tényadatok:\n""" + canonical(bundle)
 
 
 def validate_narrative(value, bundle):
-    try:
-        result = output_schema(bundle)(value)
-    except (vol.Invalid, TypeError) as error:
-        raise ValueError("Invalid measured energy interpretation") from error
-    selected = next(o for o in bundle["summary_options"] if o["text"] == result["summary"])
-    check = next(
-        (c["text"] for c in bundle["permitted_checks"] if c["ref"] in selected["refs"]), ""
+    return interpretation.validate_selection(
+        value, bundle, "A napi energiaadatok vagy az összehasonlítás hiányosak. "
     )
-    if bundle["data_quality"] != "complete":
-        result["summary"] = (
-            "A napi energiaadatok vagy az összehasonlítás hiányosak. " + result["summary"]
-        )
-    return {**result, "hypothesis": "", "suggested_check": check, "evidence_refs": selected["refs"]}

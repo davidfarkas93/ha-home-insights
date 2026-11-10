@@ -119,6 +119,47 @@ async def async_setup(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def set_heating_profile(call):
+        await _require_admin(hass, call)
+        try:
+            return await coordinator(hass).heating.set_profile(
+                call.data["profile_id"], call.data["profile"], call.data.get("expected_hash")
+            )
+        except ValueError as error:
+            raise HomeAssistantError(str(error)) from error
+
+    hass.services.async_register(
+        DOMAIN,
+        "set_heating_profile",
+        set_heating_profile,
+        schema=vol.Schema(
+            {
+                vol.Required("profile_id"): cv.string,
+                vol.Required("profile"): dict,
+                vol.Optional("expected_hash"): cv.string,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def get_heating_facts(call):
+        await _require_admin(hass, call)
+        try:
+            day = requested_day(call.data.get("date"), hass.config.time_zone) or previous_day(
+                time.time(), hass.config.time_zone
+            )
+            return await coordinator(hass).heating.facts(call.data["profile_id"], day)
+        except (ValueError, RuntimeError) as error:
+            raise HomeAssistantError(str(error)) from error
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_heating_facts",
+        get_heating_facts,
+        schema=vol.Schema({vol.Required("profile_id"): cv.string, vol.Optional("date"): cv.string}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     async def generate_report(call):
         await _require_admin(hass, call)
         try:
@@ -131,7 +172,12 @@ async def async_setup(hass: HomeAssistant) -> None:
                 day,
                 call.context,
                 call.data.get("force", False),
-                energy_profile=call.data.get("profile_id"),
+                energy_profile=call.data.get("profile_id")
+                if call.service == "generate_energy_report"
+                else None,
+                heating_profile=call.data.get("profile_id")
+                if call.service == "generate_heating_report"
+                else None,
             )
         except (ValueError, RuntimeError) as error:
             raise HomeAssistantError(str(error)) from error
@@ -164,6 +210,20 @@ async def async_setup(hass: HomeAssistant) -> None:
         ),
         supports_response=SupportsResponse.OPTIONAL,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "generate_heating_report",
+        generate_report,
+        schema=vol.Schema(
+            {
+                vol.Required("profile_id"): cv.string,
+                vol.Required("ai_task_entity"): cv.entity_domain("ai_task"),
+                vol.Optional("date"): cv.string,
+                vol.Optional("force", default=False): cv.boolean,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     for command in (
         ws_snapshot,
         ws_history,
@@ -173,6 +233,7 @@ async def async_setup(hass: HomeAssistant) -> None:
         ws_handle,
         ws_report,
         ws_energy_profile,
+        ws_heating_profile,
     ):
         websocket_api.async_register_command(hass, command)
 
@@ -182,6 +243,7 @@ async def async_setup(hass: HomeAssistant) -> None:
         vol.Required("type"): "home_insights/report",
         vol.Exclusive("policy_id", "scope"): str,
         vol.Exclusive("energy_profile", "scope"): str,
+        vol.Exclusive("heating_profile", "scope"): str,
         vol.Optional("due_time", default="08:00"): str,
         vol.Optional("grace_minutes", default=10): vol.All(int, vol.Range(min=0, max=60)),
     }
@@ -195,6 +257,7 @@ async def ws_report(hass, connection, msg):
             msg["due_time"],
             msg["grace_minutes"],
             energy_profile=msg.get("energy_profile"),
+            heating_profile=msg.get("heating_profile"),
         )
     except ValueError as error:
         connection.send_error(msg["id"], "report_unavailable", str(error))
@@ -210,6 +273,20 @@ async def ws_report(hass, connection, msg):
 async def ws_energy_profile(hass, connection, msg):
     try:
         result = coordinator(hass).energy.get_profile(msg["profile_id"])
+    except ValueError as error:
+        connection.send_error(msg["id"], "profile_unavailable", str(error))
+    else:
+        connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "home_insights/heating_profile", vol.Required("profile_id"): str}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_heating_profile(hass, connection, msg):
+    try:
+        result = coordinator(hass).heating.get_profile(msg["profile_id"])
     except ValueError as error:
         connection.send_error(msg["id"], "profile_unavailable", str(error))
     else:

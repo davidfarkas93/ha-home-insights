@@ -24,6 +24,17 @@ separate compatibility mode. Live comparison data stays in the private HA worksp
 
 ## Target ownership
 
+v0.6 adds a separate heating profile/report scope with actual flame, CH, DHW and
+connectivity inputs. Recorder history and a fixed read-only RecorderRuns ORM query
+run on Recorder's executor. State and HA recording gaps break continuity; trusted
+off→on edges count starts, and only fully observed burns ending during the day enter
+duration statistics. Mode attribution excludes DHW/mixed/unclassified burns from
+short-heating findings. Reported counts remain observed lower bounds when partial;
+unknown runs, startup states and calendar boundary fragments cannot become clean zeros.
+The shared constrained interpretation helper is reused by energy and heating;
+each topic retains its own measured statements and checks. No device control or
+room-comfort/energy inference is added. Luma reuses the existing daily report card.
+
 v0.5 adds explicitly configured energy report profiles, stored via native HA Store.
 Recorder's own executor runs bounded native statistics/history reads for four
 cumulative energy sources. Pure calculations require complete hourly sum chains,
@@ -130,4 +141,4 @@ No delivery receipt, seen flag, user-claimed fix or approved normality is fabric
 - [HA config entry lifecycle](https://contributors.home-assistant.io/core/integrations/config-entries/)
 - [HA event subscriptions](https://contributors.home-assistant.io/core/integrations/events/)
 - [Keep blocking I/O out of HA's event loop](https://contributors.home-assistant.io/core/internals/blocking-operations/)
-- Pinned HA 2026.11.0 source is authoritative for the native adapter compatibility tests.
+- Pinned HA 2026.11.1 source is authoritative for the native adapter compatibility tests.
