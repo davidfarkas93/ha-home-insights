@@ -11,6 +11,7 @@ from statistics import mean, median
 import probatio as vol
 from homeassistant.helpers.storage import Store
 
+from .heating_analysis import CycleContext, append_interval, temperature
 from .models import daily_window, digest, iso
 
 SOURCES = ("flame", "heating", "dhw", "connectivity")
@@ -25,6 +26,17 @@ PROFILE_SCHEMA = vol.Schema(
         vol.Optional("short_burn_seconds", default=180): vol.All(int, vol.Range(min=15, max=900)),
         vol.Optional("minimum_short_cycles", default=3): vol.All(int, vol.Range(min=1, max=100)),
         vol.Optional("mode_edge_seconds", default=2): vol.All(int, vol.Range(min=0, max=10)),
+        vol.Optional("temperatures"): {
+            vol.Required(k): vol.Match(r"^sensor\.[a-z0-9_]+$")
+            for k in ("flow", "return", "target")
+        },
+        vol.Optional("rapid_pause_seconds", default=120): vol.All(int, vol.Range(min=10, max=300)),
+        vol.Optional("rapid_start_interval_seconds", default=300): vol.All(
+            int, vol.Range(min=30, max=900)
+        ),
+        vol.Optional("warm_margin_celsius", default=5): vol.All(int, vol.Range(min=1, max=10)),
+        vol.Optional("warm_window_seconds", default=600): vol.All(int, vol.Range(min=60, max=1800)),
+        vol.Optional("warm_short_burns_expected", default=False): bool,
     }
 )
 
@@ -36,6 +48,8 @@ def validate_profile(value):
         raise ValueError("Invalid heating profile") from error
     if len(set(profile["sources"].values())) != len(SOURCES):
         raise ValueError("Heating sources must be distinct")
+    if "temperatures" in profile and len(set(profile["temperatures"].values())) != 3:
+        raise ValueError("Heating temperatures must be distinct")
     return profile
 
 
@@ -43,7 +57,7 @@ def stamp(value):
     return (value.replace(tzinfo=UTC) if value.tzinfo is None else value).timestamp()
 
 
-def normalize(histories, sources, start, end):
+def normalize(histories, sources, start, end, numeric=False):
     points = {}
     conflicts = 0
     for key, source in sources.items():
@@ -56,12 +70,23 @@ def normalize(histories, sources, start, end):
             if not math.isfinite(at) or at >= end:
                 continue
             at = max(start, at)
-            value = row.state if row.state in ("on", "off") else "unknown"
+            value = (
+                temperature(row)
+                if numeric
+                else row.state
+                if row.state in ("on", "off")
+                else "unknown"
+            )
             if row.attributes.get("restored"):
-                value = "unknown"
-            if at in values and values[at] != value:
+                value = None if numeric else "unknown"
+            previous_value = values.get(at)
+            if numeric and previous_value is not None:
+                previous_value = previous_value["celsius"]
+            if at in values and previous_value != value:
                 conflicts += 1
-                value = "unknown"
+                value = None if numeric else "unknown"
+            if numeric and value is not None:
+                value = {"celsius": value, "recorded_at": iso(stamp(row.last_updated))}
             values[at] = value
         points[key] = values
     return points, conflicts
@@ -90,6 +115,10 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
     start, end = daily_window(day, zone)
     lookback = start - 86400
     points, conflicts = normalize(histories, profile["sources"], lookback, end)
+    thermal, thermal_conflicts = normalize(
+        histories, profile.get("temperatures", {}), lookback, end, True
+    )
+    context = CycleContext(profile)
     trusted = [
         (max(lookback, r["start"]), min(end, r["end"] or end))
         for r in runs
@@ -101,9 +130,12 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
         boundaries.update((a, b))
     for values in points.values():
         boundaries.update(values)
+    for changes in thermal.values():
+        boundaries.update(changes)
     times = sorted(t for t in boundaries if lookback <= t <= end)
     run_starts = {a for a, _ in trusted}
     values = {k: "unknown" for k in SOURCES}
+    temperatures = {k: None for k in thermal}
     previous = "unknown"
     active = None
     cycles = []
@@ -112,6 +144,7 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
     mode_covered = 0.0
     burning = 0.0
     carried = False
+    gaps = []
 
     def close(at, reason):
         nonlocal active
@@ -133,6 +166,7 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
                     "mode": classify(active["parts"], began, at, profile["mode_edge_seconds"])
                     if complete
                     else "unclassified",
+                    "temperatures_at_start": active["temperatures"],
                 }
             )
         active = None
@@ -142,9 +176,17 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
             close(at, "recorder_boundary")
             values = {k: "unknown" for k in SOURCES}
             previous = "unknown"
+            temperatures = {k: None for k in thermal}
+            context.barriers.append(at)
         for key, changes in points.items():
             if at in changes:
                 values[key] = changes[at]
+        if values["connectivity"] != "on":
+            temperatures = {k: None for k in thermal}
+        else:
+            for key, changes in thermal.items():
+                if at in changes:
+                    temperatures[key] = changes[at]
         recording = any(a <= at < b for a, b in trusted)
         flame = values["flame"] if recording and values["connectivity"] == "on" else "unknown"
         if flame != previous:
@@ -154,10 +196,18 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
                 began = at if previous == "off" else None
                 if began is not None and start <= at < end:
                     ignitions += 1
-                active = {"started": began, "observed_from": at, "parts": []}
+                active = {
+                    "started": began,
+                    "observed_from": at,
+                    "parts": [],
+                    "temperatures": dict(temperatures),
+                }
             previous = flame
         until = times[i + 1]
         a, b = max(start, at), min(end, until)
+        context.observe(at, until, flame, mode_of(values), temperatures)
+        if b > a and flame == "unknown":
+            append_interval(gaps, a, b)
         if b > a and flame != "unknown":
             covered += b - a
             if flame == "off" or mode_of(values) != "unknown":
@@ -173,15 +223,25 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
     heating = [c for c in complete if c["mode"] == "heating"]
     short = [c for c in heating if c["duration_seconds"] < profile["short_burn_seconds"]]
     durations = [c["duration_seconds"] for c in heating]
+    cycle_analysis = context.analyze(cycles)
     good = covered >= end - start - 0.001 and mode_covered >= end - start - 0.001 and not conflicts
-    finding = len(short) >= profile["minimum_short_cycles"]
+    minor_gaps = (
+        0 < end - start - covered <= 300
+        and all(b - a <= 120 for a, b in gaps)
+        and covered - mode_covered < 0.001
+        and not conflicts
+        and not any(
+            c["reason"] in ("observation_gap", "recorder_boundary", "start_unknown") for c in cycles
+        )
+    )
+    finding = cycle_analysis["short_cycle_pattern"]
     assessment = (
         "not_run"
         if covered == 0
-        else "insufficient_data"
-        if not good
         else "attention_needed"
         if finding
+        else "insufficient_data"
+        if not good and not minor_gaps
         else "no_anomaly_found"
     )
     return {
@@ -202,7 +262,20 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
         "mode_coverage_seconds": round(mode_covered, 3),
         "unobserved_seconds": round(max(0, end - start - covered), 3),
         "assessment": assessment,
-        "data_quality": "complete" if good else "insufficient_data",
+        "data_quality": "complete" if good else "minor_gaps" if minor_gaps else "insufficient_data",
+        "observation_gaps": {
+            "count": len(gaps),
+            "longest_seconds": round(max((b - a for a, b in gaps), default=0), 3),
+            "intervals": [
+                {"start": iso(a), "end": iso(b), "seconds": round(b - a, 3)} for a, b in gaps[:200]
+            ],
+            "truncated": len(gaps) > 200,
+            "minor_policy": {
+                "maximum_total_seconds": 300,
+                "maximum_single_seconds": 120,
+                "requires_no_interrupted_burns": True,
+            },
+        },
         "counts": {},
         "burner": {
             "observed_ignitions": ignitions if covered else None,
@@ -222,7 +295,7 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
             "heating_min_seconds": min(durations) if durations else None,
             "heating_max_seconds": max(durations) if durations else None,
             "short_heating": len(short) if heating else None,
-            "short_cycle_pattern": finding,
+            **cycle_analysis,
             "samples": sorted(cycles, key=lambda c: c["observed_from"])[-200:],
             "truncated": len(cycles) > 200,
         },
@@ -230,6 +303,7 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
             "runs": len(runs),
             "untrusted_runs": sum(r["closed_incorrect"] for r in runs),
             "conflicting_states": conflicts,
+            "thermal_conflicting_states": thermal_conflicts,
         },
         "limitations": [
             "recorded_flame_feedback_not_thermostat_demand",
@@ -237,6 +311,9 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
             "only_complete_heating_burns_enter_duration_and_short_burn_statistics",
             "dhw_mixed_and_unclassified_burns_do_not_create_short_heating_alerts",
             "short_burn_threshold_is_a_review_heuristic_not_a_fault_diagnosis",
+            "rapid_sequences_require_consecutive_short_heating_burns_and_known_spacing",
+            "warm_context_never_suppresses_rapid_restart_sequences",
+            "held_recorded_temperatures_are_not_independent_fresh_sensor_samples",
             "no_gas_consumption_or_room_comfort_inferred",
         ],
     }
@@ -328,7 +405,7 @@ class HeatingReports:
             self.owner.hass,
             datetime.fromtimestamp(start - 86400, UTC),
             datetime.fromtimestamp(end, UTC),
-            list(profile["sources"].values()),
+            list(profile["sources"].values()) + list(profile.get("temperatures", {}).values()),
         )
         async with asyncio.timeout(60):
             history, runs = await get_instance(self.owner.hass).async_add_executor_job(job)

@@ -109,53 +109,65 @@ measurement-bound check are derived from the selected statements. This prevents
 free prose from changing a median to a mean, inventing a cause, or citing unrelated
 measurements. NAS measurements remain a future scope.
 
-## Heating morning reports (v0.6)
+## Heating morning reports (v0.7)
 
-`home_insights.set_heating_profile` explicitly binds four distinct `binary_sensor`
-sources under `sources.flame`, `heating`, `dhw` and `connectivity`. The version-1
-profile also requires `revision`. Optional `short_burn_seconds` (default 180),
-`minimum_short_cycles` (default 3) and `mode_edge_seconds` (default 2) are review
-heuristics, not manufacturer fault limits. Profile replacement requires the current
-hash from administrator-only `home_insights/heating_profile`; configuration lives
-in native HA Store. No thermostat, boiler setting or device is changed.
+`home_insights.set_heating_profile` binds four distinct `binary_sensor` sources
+under `sources.flame`, `heating`, `dhw` and `connectivity`. A v1 profile requires
+`revision`; replacement requires its current hash from the administrator-only
+`home_insights/heating_profile` WebSocket command. Profiles live in native HA Store.
+No thermostat, boiler setting or device is changed.
 
 `home_insights.get_heating_facts` reads `profile_id` and an optional completed local
-`date`. `home_insights.generate_heating_report` additionally takes `ai_task_entity`
-and optional `force`. Native HA owns the morning time trigger. Luma 0.52's existing
-report card accepts `heating_profile` instead of `policy` or `energy_profile`;
-`home_insights/report` uses the same mutually exclusive selector. Separate `heating:`
-keys isolate attempt/cache/success from energy and attention reports. All private
-facts/profile APIs require an administrator; native automations may run reports.
+`date`. `home_insights.generate_heating_report` also takes `ai_task_entity` and
+optional `force`. Native HA owns the time trigger. Luma 0.53's existing report card
+accepts `heating_profile` instead of `policy` or `energy_profile`. Separate `heating:`
+keys isolate attempt/cache/success. An earlier successful report is reused unless
+forced; force after changing a profile if the same day's interpretation must change.
 
-Flame feedback, a connected bus and trusted Recorder run intervals establish
-observation. Room heat demand is never substituted for burner operation. History
-reads use the native Recorder history API on its executor. One fixed, read-only,
-version-pinned ORM query of `RecorderRuns` prevents carrying states through HA
-downtime. Incorrectly closed runs are conservatively untrusted. There is no raw SQL,
-arbitrary query endpoint, new database client or external process. One-day lookback
-can establish a carried cycle's beginning; no post-midnight future data is read.
-State/Recorder gaps break cycles; recovery while already firing is not an ignition.
-Restored/unknown states cannot establish a clean result. Input/run/sample budgets
-are bounded, and partial coverage stays explicit without rounding it up to 100%.
+Flame feedback, connected bus and trusted Recorder intervals establish observation.
+Room demand is separate. Native history reads and one fixed read-only RecorderRuns
+ORM query run on Recorder's executor. Gaps and run boundaries break continuity;
+unknown recovery is not an ignition. Only complete burns ending during the local day
+enter duration statistics. DHW, mixed and unknown burns are excluded from short CH
+counts. Unknown starts and unfinished/interrupted burns remain separate. Counts and
+runtime retain `≥` when observation is incomplete; no gas/heat/comfort is inferred.
 
-The report separates observed ignitions, observed firing duration, full heating
-burn lengths and identified short heating burns. Counts/duration are lower bounds
-when burner observation is incomplete. Duration statistics use only fully observed
-burns that end during the examined day; a burn may have started the previous day.
-Unknown starts, interruptions and still-firing day-end fragments remain separate.
-CH/DHW feedback attributes each full burn to heating, hot water, mixed or unclassified.
-Only known inactive mode edges within the configured margin may be ignored;
-unknown modes and any opposite/mixed mode prevent pure-heating classification.
-Hot-water/mixed/unclassified burns never inflate the short-heating count. A short
-burn is strictly below the configured duration; repeated eligible burns trigger
-a review finding. With no complete heating burns, length/short count is unknown,
-not a fabricated zero. No gas use, delivered heat or room comfort is inferred.
+**A short burn alone is not an incident.** `short_burn_seconds` defaults to 180.
+A rapid restart sequence requires consecutive complete short heating burns with
+known uninterrupted spacing: `rapid_pause_seconds` defaults to 120,
+`rapid_start_interval_seconds` to 300, and `minimum_short_cycles` to 3. DHW/mixed,
+unknown intervals and longer burns break the sequence. `mode_edge_seconds` defaults
+to 2. These are explicit review heuristics, not manufacturer fault limits.
 
-The AI selects up to two measured statements through the same constrained native
-output schema as energy. The backend attaches citations/checks and a deterministic
-partial-observation prefix. Confirmed short burns can still be shown alongside an
-insufficient-data assessment; the missing intervals may hide additional starts.
-The task receives no HA/MCP, configuration, firmware, shell or provider tools.
+Optional `temperatures.flow`, `return` and `target` map three distinct temperature
+sensors. Celsius/Fahrenheit are converted to °C; missing units, restored/nonfinite
+values and gaps cannot establish warmth. Warm context requires a preceding complete
+heating burn no more than 30 minutes earlier and continuously recorded return/flow
+at least target minus `warm_margin_celsius` (default 5) for
+`warm_window_seconds` (default 600). Unknown/DHW intervals break this context.
+Held recorded values are disclosed as such, not claimed as a fresh physical sample
+at each ignition; a bus/Recorder gap requires new recorded values. Full start-time
+values and their recording timestamps remain in the facts.
+
+`warm_short_burns_expected: true` records explicitly approved household context:
+brief burns during established warm operation can be expected in this installation.
+It enables a conditional explanation, never suppresses a rapid restart finding and
+is not a blanket boiler-health exception. Profile revision/hash are saved with each
+attempt. Thermal inputs are optional; absent context stays unknown.
+
+Assessment and observation quality are separate. Brief gaps are `minor_gaps` when
+their total is at most 300 seconds, each is at most 120 seconds, no burn was lost or
+interrupted, and mode classification/conflicts introduce no further uncertainty.
+The main result can describe the observed behavior; the card separately shows gap
+times, actual coverage and lower-bound totals. Larger/critical gaps remain
+`insufficient_data`; a confirmed rapid finding takes precedence with the data-quality
+warning retained. Zero observation is `not_run`, not a clean day.
+
+AI selects up to two measured statements through the same constrained native schema
+as energy. Measured restart findings, thermal evidence and approved context determine
+the permitted explanations. Backend-derived citations/checks cannot invent causes,
+values, controls or device actions. No HA/MCP, firmware, shell or provider tools are
+passed to the task.
 
 ## Shared Luma policies
 

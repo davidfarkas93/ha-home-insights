@@ -24,6 +24,14 @@ separate compatibility mode. Live comparison data stays in the private HA worksp
 
 ## Target ownership
 
+v0.7 separates raw short burns from consecutive rapid restart sequences, retaining
+pause/start intervals and optional recorded flow/return/target context. Approved
+warm-operation context is conditional explanatory input, never a fault suppression.
+Thermal gaps remain unknown; recorded held temperatures are not fresh sample claims.
+Minor idle observation gaps are disclosed independently of the scoped behavioral
+assessment. All counts still retain their true coverage/lower-bound semantics.
+
+
 v0.6 adds a separate heating profile/report scope with actual flame, CH, DHW and
 connectivity inputs. Recorder history and a fixed read-only RecorderRuns ORM query
 run on Recorder's executor. State and HA recording gaps break continuity; trusted

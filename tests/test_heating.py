@@ -70,8 +70,8 @@ def test_flame_not_thermostat_demand_drives_counts_and_lengths():
     assert f["cycles"]["heating"] == 4 and f["cycles"]["short_heating"] == 3
     assert f["cycles"]["heating_median_seconds"] == 60
     assert f["cycles"]["heating_mean_seconds"] == 120
-    assert f["cycles"]["short_cycle_pattern"]
-    assert f["assessment"] == "attention_needed" and f["coverage_percent"] == 100
+    assert not f["cycles"]["short_cycle_pattern"], "Ten-minute spacing is not rapid cycling"
+    assert f["assessment"] == "no_anomaly_found" and f["coverage_percent"] == 100
 
 
 def test_dhw_and_mixed_burns_never_count_as_short_heating():
@@ -206,12 +206,16 @@ def test_profile_is_explicit_and_has_no_control_or_duplicate_sources():
 
 
 def test_narrative_is_grounded_and_short_burn_findings_cannot_disappear():
-    bundle = reporting.evidence_bundle(facts())
+    h, r = fixture()
+    for at in (60, 180, 300):
+        event(h, "flame", at, "on")
+        event(h, "flame", at + 30, "off")
+    bundle = reporting.evidence_bundle(facts(h, r))
     assert bundle["scope"] == "heating_cycles" and "summary_options" in reporting.instructions(
         bundle
     )
     for option in bundle["summary_options"]:
-        assert "short_burns" in option["refs"]
+        assert "rapid_restarts" in option["refs"]
         result = reporting.validate_narrative({"summary": option["text"]}, bundle)
         assert result["evidence_refs"] == option["refs"] and result["suggested_check"]
         assert not result["hypothesis"]
@@ -219,7 +223,7 @@ def test_narrative_is_grounded_and_short_burn_findings_cannot_disappear():
         reporting.validate_narrative({"summary": "A kazán biztosan meghibásodott."}, bundle)
     h, r = observed()
     event(h, "connectivity", 5000, "off")
-    event(h, "connectivity", 5020, "on")
+    event(h, "connectivity", 5400, "on")
     partial = reporting.evidence_bundle(facts(h, r))
     result = reporting.validate_narrative(
         {"summary": partial["summary_options"][0]["text"]}, partial

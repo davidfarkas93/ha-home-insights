@@ -28,22 +28,28 @@ def evidence_bundle(facts):
 
     if cycles["short_cycle_pattern"]:
         add(
-            "short_burns",
-            "Rövid fűtési égések",
+            "rapid_restarts",
+            "Gyors újraindulási sorozatok",
             sources["flame"],
-            "Ismétlődő rövid fűtési égések voltak a teljesen megfigyelt ciklusok között.",
-            {"short_heating": cycles["short_heating"], "heating": cycles["heating"]},
+            (
+                "Egymást követő rövid fűtési égések gyors újraindulási sorozatot "
+                "alkottak; ezt érdemes ellenőrizni."
+            ),
+            {
+                k: cycles[k]
+                for k in ("rapid_restart_sequences", "rapid_restart_burns", "warm_short_heating")
+            },
             check=(
-                "Fűtési égések: nézd át a rövid égések időpontjait és a hozzájuk "
-                "tartozó égő-, fűtési és melegvíz-visszajelzéseket."
+                "Fűtési égések: nézd át a gyors újraindulási sorozatok szüneteit, "
+                "az indulás előtti hőmérsékleteket és a fűtési/melegvíz-visszajelzéseket."
             ),
             important=True,
         )
     elif cycles["heating"]:
         text = (
             (
-                "Előfordult rövid fűtési égés, de a megfigyelt szám "
-                "nem érte el az ismétlődési küszöböt."
+                "Voltak rövid fűtési égések, de a megfigyelt égések között "
+                "nem alakult ki gyors újraindulási sorozat."
             )
             if cycles["short_heating"]
             else (
@@ -57,6 +63,7 @@ def evidence_bundle(facts):
             sources["flame"],
             text,
             {k: cycles[k] for k in ("heating", "short_heating", "heating_median_seconds")},
+            important=True,
         )
     elif burner["observed_seconds"] == 0:
         add(
@@ -71,6 +78,39 @@ def evidence_bundle(facts):
             "Fűtési ciklusok",
             sources["flame"],
             "Teljesen megfigyelt, lezárt fűtési égés ezen a napon nem volt besorolható.",
+        )
+    if cycles.get("warm_short_heating"):
+        add(
+            "warm_operation",
+            "Meleg üzemi környezet",
+            facts["profile"]["temperatures"]["return"],
+            (
+                (
+                    "A rövid égések egy része már meleg rendszerben történt; "
+                    "ez összeegyeztethető a nálad megszokott hőntartással, önmagában nem hibajel."
+                )
+                if facts["profile"]["warm_short_burns_expected"]
+                else (
+                    "A rövid égések egy részét tartósan a célérték közelében lévő visszatérő "
+                    "és előremenő előzte meg; ez önmagában nem bizonyít hibát."
+                )
+            ),
+            {
+                "warm_short_heating": cycles["warm_short_heating"],
+                "user_context": facts["profile"]["warm_short_burns_expected"],
+            },
+            important=not cycles["short_cycle_pattern"],
+        )
+    elif cycles.get("short_context_unknown"):
+        add(
+            "thermal_unknown",
+            "Hőmérsékleti háttér",
+            sources["flame"],
+            (
+                "Egyes rövid égéseknél a megelőző hőmérsékleti adatokból nem állapítható meg, "
+                "hogy már meleg volt-e a rendszer."
+            ),
+            {"short_context_unknown": cycles["short_context_unknown"]},
         )
     if cycles["dhw"]:
         add(
@@ -122,8 +162,10 @@ def evidence_bundle(facts):
             check=(
                 "Megfigyelés: nézd meg az OpenTherm-kapcsolat és "
                 "az égő-visszajelzés hiányos időszakait."
-            ),
-            important=not priority,
+            )
+            if facts["data_quality"] != "minor_gaps"
+            else None,
+            important=facts["data_quality"] != "minor_gaps",
         )
     return {
         "scope": "heating_cycles",
@@ -146,7 +188,11 @@ def instructions(bundle):
     return """Válaszd ki az előző nap leghasznosabb rövid magyar fűtési visszatekintését.
 A summary pontosan egy summary_options.text legyen. Ezek a HA által számolt tényekből
 ellenőrzött megállapítások. A hivatkozásokat és a javasolt ellenőrzést a backend rendeli hozzá.
-A rövid fűtési égések és az adathiány fontosabbak a rutinadatnál. A melegvíz-készítést
+A gyors újraindulási sorozat fontosabb a rutinadatnál. A rövid égés önmagában nem probléma.
+A meleg üzemi környezet és a jóváhagyott háztartási háttértudás lehetséges magyarázat,
+nem bizonyíték a hibamentességre, és nem menti fel a sűrű újraindulási sorozatokat.
+A csekély megfigyelési hiány az adatminőség megjegyzése, nem egész napos hibajel.
+A melegvíz-készítést
 külön kezeld; rövid melegvíz-égésből ne következtess fűtési rövid ciklusra.
 Termosztát-hőigény nem kazánégés. Az ismeretlen vagy befejezetlen égés nem teljes ciklus.
 A küszöb ellenőrzési szempont, nem gyártói hibahatár és nem hibadiagnózis.
@@ -157,5 +203,9 @@ HA-tényadatok:\n""" + canonical(bundle)
 
 def validate_narrative(value, bundle):
     return interpretation.validate_selection(
-        value, bundle, "A fűtési visszajelzések megfigyelése hiányos volt. "
+        value,
+        bundle,
+        ""
+        if bundle["data_quality"] == "minor_gaps"
+        else "A fűtési visszajelzések megfigyelése hiányos volt. ",
     )
