@@ -16,6 +16,8 @@ TIMEOUT = 120
 
 
 def output_schema(bundle):
+    if bundle.get("scope") == "energy_statistics":
+        return energy_reporting.output_schema(bundle)
     return vol.Schema(
         {
             vol.Required("summary"): str,

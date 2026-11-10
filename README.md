@@ -103,8 +103,11 @@ are met, not physical fault diagnoses. EV charging/export changes provide contex
 zero charging is not an incident. Missing comparison history is insufficient data,
 even if current totals are known. Comparisons are not weather/occupancy normalized;
 no forecast discrepancy, tariff cost, EV solar share or total home consumption is
-inferred. AI only writes an attributed qualitative interpretation and selects a
-known measurement-bound check. Heating and NAS measurements remain future scopes.
+inferred. AI prioritizes constrained combinations of short, HA-verified statements. The
+native output schema enumerates only those valid summaries; citations and a known
+measurement-bound check are derived from the selected statements. This prevents
+free prose from changing a median to a mean, inventing a cause, or citing unrelated
+measurements. Heating and NAS measurements remain future scopes.
 
 ## Shared Luma policies
 

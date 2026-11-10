@@ -29,7 +29,8 @@ Recorder's own executor runs bounded native statistics/history reads for four
 cumulative energy sources. Pure calculations require complete hourly sum chains,
 known boundary states and enough earlier statistical days for a median comparison.
 Profile/hash and measured facts are persisted with the attempt; AI receives only
-an evidence-bound qualitative projection. An `energy:` report-key namespace keeps
+a bounded projection and selects a combination of verified measurement statements;
+the output schema constrains the summary, and citations/checks follow deterministically. An `energy:` report-key namespace keeps
 energy attempts/cache/success independent of attention policy reports. Native time
 triggers and Luma's existing report card remain the scheduling/presentation owners.
 No household mappings, Energy Dashboard preferences, device controls or new API

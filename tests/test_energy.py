@@ -49,10 +49,10 @@ def facts():
 
 def narrative():
     return {
-        "summary": "A Napelemtermelés a korábbi napok mediánja alatt maradt, a Hálózati import magasabb volt.",
-        "hypothesis": "",
-        "suggested_check": "",
-        "evidence_ids": "solar,grid_import",
+        "summary": (
+            "A napelemtermelés elmaradt a korábbi napok mediánjától. "
+            "A hálózati import meghaladta a korábbi napok mediánját."
+        ),
     }
 
 
@@ -206,6 +206,25 @@ def test_energy_ai_receives_only_measured_projection_and_source_bound_checks():
     ):
         with pytest.raises(ValueError):
             reporting.validate_narrative({**narrative(), **change}, bundle)
+
+
+def test_energy_summary_choices_keep_all_findings_and_derive_exact_sources():
+    bundle = reporting.evidence_bundle(facts())
+    assert len(bundle["summary_options"]) == 2
+    for option in bundle["summary_options"]:
+        assert set(option["refs"]) == {"solar", "grid_import"}
+        result = reporting.validate_narrative({"summary": option["text"]}, bundle)
+        assert result["evidence_refs"] == option["refs"]
+        assert result["suggested_check"] in [c["text"] for c in bundle["permitted_checks"]]
+        assert result["hypothesis"] == ""
+    assert all("samples" not in e["baseline"] for e in bundle["evidence"])
+    for summary in (
+        "A napelemtermelés elmaradt a korábbi napok átlagától.",
+        "Biztosan meghibásodott az inverter.",
+        "Az autótöltés rögzített energiája nem nőtt.",
+    ):
+        with pytest.raises(ValueError):
+            reporting.validate_narrative({"summary": summary}, bundle)
 
 
 async def test_profile_persists_hash_guard_and_facts_use_recorder_executor(hass):
