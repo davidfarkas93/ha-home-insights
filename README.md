@@ -53,6 +53,59 @@ Report facts and attempts stay in the integration's private SQLite journal and a
 not placed in giant Recorder sensor attributes or MQTT messages. The existing raw
 facts endpoint remains available; installing alone does not rewrite an automation.
 
+## Energy morning reports (v0.5)
+
+Energy reports are an independent scope; they never combine energy measurements
+with attention episode counts. An administrator explicitly imports a profile with
+`home_insights.set_energy_profile` (`profile_id`, `profile`, optional `expected_hash`).
+Existing profiles require their current hash from the administrator-only
+`home_insights/energy_profile` WebSocket command. The profile uses native HA Store;
+household mappings belong in runtime configuration, not the integration source.
+
+Profile v1 fields:
+
+| Field | Meaning |
+| --- | --- |
+| `version`, `revision` | `1` and an explicit revision string |
+| `metrics` | Four distinct cumulative sensor statistic IDs under `solar`, `grid_import`, `grid_export`, `ev` |
+| `baseline_days` | Prior completed local days to examine, 7–28; default 14 |
+| `minimum_baseline_days` | Required complete statistical days, at least 7; default 7 |
+| `deviation_percent`, `deviation_kwh` | Relative and absolute differences that must **both** be met; defaults 50% and 3 kWh |
+
+`home_insights.get_energy_facts` reads a profile and optional completed local `date`
+without AI or journal writes. `home_insights.generate_energy_report` takes
+`profile_id`, `ai_task_entity`, optional `date` and `force`. It uses the same bounded,
+tool-free native AI Task and persisted attempt lifecycle as attention reports.
+Native HA automations own the time trigger. Luma 0.51's existing daily report card
+accepts `energy_profile` **instead of** `policy`; `home_insights/report` accepts the
+same mutually exclusive scope selector. Attention reports retain their original API.
+
+Totals use Recorder's reset-adjusted cumulative `sum` at local day boundaries,
+converted by Core to kWh. Every UTC hour plus the preceding baseline is required;
+negative changes, missing/duplicate buckets, unsupported units and unknown raw
+history boundary states cannot establish a complete day. Zero is displayed only
+for a verified total. DST days use 23 or 25 hours; zones with non-hour-aligned local
+midnights are explicitly unsupported by this hourly implementation. Queries run on
+Recorder's executor via native read APIs, never direct SQL or the event loop. The
+profile snapshot/hash, values, coverage and comparison samples are persisted with
+the attempt before interpretation. Historical data may be used without waiting for
+Home Insights itself to observe a full day.
+
+Recovered internal counter outages are disclosed separately: missing device
+telemetry is not automatically lost energy when both day boundaries and all hourly
+statistics remain known. Statistical completeness does **not** certify device uptime,
+hardware accuracy or a counter's ability to accumulate while disconnected. A source
+that masks missing values needs its own quality audit before selection.
+
+The prior-day median excludes the examined day and incomplete statistical days.
+Lower solar yield and higher import are observations when both configured thresholds
+are met, not physical fault diagnoses. EV charging/export changes provide context;
+zero charging is not an incident. Missing comparison history is insufficient data,
+even if current totals are known. Comparisons are not weather/occupancy normalized;
+no forecast discrepancy, tariff cost, EV solar share or total home consumption is
+inferred. AI only writes an attributed qualitative interpretation and selects a
+known measurement-bound check. Heating and NAS measurements remain future scopes.
+
 ## Shared Luma policies
 
 The response-only administrator action `home_insights.set_attention_policy` accepts

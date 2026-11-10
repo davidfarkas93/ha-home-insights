@@ -24,6 +24,17 @@ separate compatibility mode. Live comparison data stays in the private HA worksp
 
 ## Target ownership
 
+v0.5 adds explicitly configured energy report profiles, stored via native HA Store.
+Recorder's own executor runs bounded native statistics/history reads for four
+cumulative energy sources. Pure calculations require complete hourly sum chains,
+known boundary states and enough earlier statistical days for a median comparison.
+Profile/hash and measured facts are persisted with the attempt; AI receives only
+an evidence-bound qualitative projection. An `energy:` report-key namespace keeps
+energy attempts/cache/success independent of attention policy reports. Native time
+triggers and Luma's existing report card remain the scheduling/presentation owners.
+No household mappings, Energy Dashboard preferences, device controls or new API
+credentials are installed by the integration itself. Heating and NAS remain later.
+
 v0.4 runs an explicitly invoked morning interpretation inside Core, using native
 AI Task with no LLM API/attachments and a verified tool-free OpenAI provider. Native
 HA automations retain the time trigger. Attempts and successful reports are separate

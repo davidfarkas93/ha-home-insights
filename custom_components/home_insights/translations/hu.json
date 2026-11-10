@@ -98,6 +98,51 @@
           "name": "Meglévő eredmény újragenerálása"
         }
       }
+    },
+    "set_energy_profile": {
+      "name": "Energiaprofil beállítása",
+      "description": "Energiaforrások és összehasonlítási küszöbök tárolása; meglévő profilhoz az aktuális hash szükséges.",
+      "fields": {
+        "profile_id": {
+          "name": "Profilazonosító"
+        },
+        "profile": {
+          "name": "Energiaprofil"
+        },
+        "expected_hash": {
+          "name": "Elvárt profilhash"
+        }
+      }
+    },
+    "get_energy_facts": {
+      "name": "Napi energiatények olvasása",
+      "description": "Befejezett helyi nap és korábbi napok összehasonlítása a Recorderből, AI és eszközműveletek nélkül.",
+      "fields": {
+        "profile_id": {
+          "name": "Profilazonosító"
+        },
+        "date": {
+          "name": "Dátum"
+        }
+      }
+    },
+    "generate_energy_report": {
+      "name": "Reggeli energiajelentés készítése",
+      "description": "Számított napi energiaösszegek és összehasonlítás mentése, majd rövid értelmezés készítése eszközök nélküli AI Taskkal.",
+      "fields": {
+        "profile_id": {
+          "name": "Profilazonosító"
+        },
+        "ai_task_entity": {
+          "name": "Eszközök nélküli AI Task"
+        },
+        "date": {
+          "name": "Dátum"
+        },
+        "force": {
+          "name": "Újragenerálás"
+        }
+      }
     }
   }
 }

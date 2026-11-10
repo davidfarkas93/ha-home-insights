@@ -24,6 +24,7 @@ from . import adapters
 from .attention_runtime import AttentionRuntime
 from .const import DOMAIN, HEARTBEAT_SECONDS, QUEUE_LIMIT
 from .daily_attention import daily_attention
+from .energy import EnergyReports
 from .journal import Journal
 from .models import previous_day
 from .reporting import ReportManager
@@ -55,6 +56,7 @@ class Coordinator:
         self.worker: asyncio.Task | None = None
         self.journal: Journal | None = None
         self.attention = AttentionRuntime(self)
+        self.energy = EnergyReports(self)
         self.reports = ReportManager(self)
 
     async def execute(self, function, *args):
@@ -62,6 +64,7 @@ class Coordinator:
 
     async def async_setup(self) -> None:
         await self.attention.load()
+        await self.energy.load()
         policy = {
             "version": 1,
             "revision": "native-observers.1",

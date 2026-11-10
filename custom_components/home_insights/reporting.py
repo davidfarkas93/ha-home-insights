@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import probatio as vol
 
-from . import report_store
+from . import energy_reporting, report_store
 from .models import canonical, previous_day
 
 TIMEOUT = 120
@@ -36,6 +36,8 @@ def clean_text(value, limit=500):
 
 
 def evidence_bundle(facts):
+    if facts.get("scope") == "energy_statistics":
+        return energy_reporting.evidence_bundle(facts)
     evidence = []
     for item in facts.get("episodes", [])[:8]:
         evidence.append(
@@ -146,6 +148,8 @@ def evidence_bundle(facts):
 
 
 def instructions(bundle):
+    if bundle.get("scope") == "energy_statistics":
+        return energy_reporting.instructions(bundle)
     return """
 Írj rövid magyar reggeli visszatekintést kizárólag az előző helyi naptári nap alábbi HA-
 tényeiből.
@@ -181,6 +185,8 @@ HA-tényadatok:\n""" + canonical(bundle)
 
 
 def validate_narrative(value, bundle):
+    if bundle.get("scope") == "energy_statistics":
+        return energy_reporting.validate_narrative(value, bundle)
     keys = {"summary", "hypothesis", "suggested_check", "evidence_ids"}
     if (
         not isinstance(value, dict)
@@ -272,7 +278,11 @@ async def summarize(hass, entity_id, bundle, context):
     return await ai_task.async_generate_data(
         hass,
         entity_id=entity_id,
-        task_name="Előző napi otthoni rendszerjelentés",
+        task_name=(
+            "Előző napi energiamérleg"
+            if bundle.get("scope") == "energy_statistics"
+            else "Előző napi otthoni rendszerjelentés"
+        ),
         instructions=instructions(bundle),
         structure=output_schema(bundle),
         llm_api=None,
@@ -291,9 +301,18 @@ class ReportManager:
         self.owner.data = await self.owner.execute(self.owner.journal.snapshot)
         self.owner._notify()
 
-    async def generate(self, policy, entity_id, day, context, force=False):
+    def scope_key(self, policy, energy_profile):
+        if energy_profile is not None:
+            if policy is not None:
+                raise ValueError("Select one report scope")
+            self.owner.energy.get_profile(energy_profile)
+            return "energy:" + energy_profile
         if policy not in self.owner.attention.policies:
             raise ValueError("Unknown attention policy")
+        return policy
+
+    async def generate(self, policy, entity_id, day, context, force=False, *, energy_profile=None):
+        policy = self.scope_key(policy, energy_profile)
         if self.owner.closed or self.owner.failed or not self.owner.started:
             raise RuntimeError("Journal is not recording")
         if policy in self.policies:
@@ -318,7 +337,11 @@ class ReportManager:
             await self.notify()
             error = "collection_failed"
             try:
-                facts = await self.owner.async_daily_facts(day, policy)
+                facts = (
+                    await self.owner.energy.facts(energy_profile, day)
+                    if energy_profile is not None
+                    else await self.owner.async_daily_facts(day, policy)
+                )
                 bundle = evidence_bundle(facts)
                 facts = {
                     **facts,
@@ -330,7 +353,20 @@ class ReportManager:
                 await self.owner.execute(
                     report_store.save_report_facts, self.owner.journal, attempt["id"], facts
                 )
-                if facts["assessment"] == "not_run":
+                if facts.get("scope") == "energy_statistics" and not any(
+                    m["value"] is not None for m in facts["metrics"]
+                ):
+                    narrative = {
+                        "summary": (
+                            "Erre a napra nincs igazolt, teljes napi energiaösszesítés; "
+                            "az eltérések nem értékelhetők."
+                        ),
+                        "hypothesis": "",
+                        "suggested_check": "",
+                        "evidence_refs": [],
+                    }
+                    skipped = True
+                elif facts["assessment"] == "not_run":
                     narrative = {
                         "summary": (
                             "Erre a napra nincs megfigyelt rendszeradat; "
@@ -395,9 +431,8 @@ class ReportManager:
             self.tasks.discard(task)
             self.policies.discard(policy)
 
-    async def read(self, policy, due_time="08:00", grace=10):
-        if policy not in self.owner.attention.policies:
-            raise ValueError("Unknown attention policy")
+    async def read(self, policy, due_time="08:00", grace=10, *, energy_profile=None):
+        policy = self.scope_key(policy, energy_profile)
         if not re.fullmatch(r"\d{2}:\d{2}", due_time):
             raise ValueError("Invalid due time")
         at = day_time.fromisoformat(due_time)
@@ -421,6 +456,7 @@ class ReportManager:
         return {
             "schema_version": 1,
             "policy_id": policy,
+            "energy_profile": energy_profile,
             "timezone": zone,
             "expected_day": day.isoformat(),
             "generated_at": now,

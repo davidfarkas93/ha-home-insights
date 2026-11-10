@@ -98,6 +98,51 @@
           "name": "Regenerate an existing result"
         }
       }
+    },
+    "set_energy_profile": {
+      "name": "Set energy profile",
+      "description": "Store explicit cumulative energy sources and comparison thresholds; replacing a profile requires its current hash.",
+      "fields": {
+        "profile_id": {
+          "name": "Profile ID"
+        },
+        "profile": {
+          "name": "Energy profile"
+        },
+        "expected_hash": {
+          "name": "Expected profile hash"
+        }
+      }
+    },
+    "get_energy_facts": {
+      "name": "Read daily energy facts",
+      "description": "Read a completed local day and prior-day comparison from Recorder without AI or device actions.",
+      "fields": {
+        "profile_id": {
+          "name": "Profile ID"
+        },
+        "date": {
+          "name": "Date"
+        }
+      }
+    },
+    "generate_energy_report": {
+      "name": "Generate energy morning report",
+      "description": "Persist deterministic energy totals and comparison, then ask a tool-free AI Task for a short interpretation.",
+      "fields": {
+        "profile_id": {
+          "name": "Profile ID"
+        },
+        "ai_task_entity": {
+          "name": "Tool-free AI Task"
+        },
+        "date": {
+          "name": "Date"
+        },
+        "force": {
+          "name": "Regenerate"
+        }
+      }
     }
   }
 }
