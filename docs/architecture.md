@@ -24,6 +24,13 @@ separate compatibility mode. Live comparison data stays in the private HA worksp
 
 ## Target ownership
 
+v0.4 runs an explicitly invoked morning interpretation inside Core, using native
+AI Task with no LLM API/attachments and a verified tool-free OpenAI provider. Native
+HA automations retain the time trigger. Attempts and successful reports are separate
+SQLite records; restart recovery, timeout, collection/provider/output failure and a
+missed schedule never become a clean result. The report read API is admin-only,
+matching private raw journal access. Other providers need a deliberate tool audit.
+
 v0.3 provides canonical completed-day facts and a separate user handling ledger.
 Facts clip coverage to adoption/runs/gaps, separate incidents from updates/events,
 and read evidence/metadata strictly before the next local midnight. Metadata never

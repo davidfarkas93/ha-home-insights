@@ -1,5 +1,6 @@
 """Read-only journal APIs. No generic service, template, shell or SQL endpoint."""
 
+import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,7 @@ from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
+from .models import previous_day
 
 
 def coordinator(hass: HomeAssistant):
@@ -75,8 +77,68 @@ async def async_setup(hass: HomeAssistant) -> None:
         ),
         supports_response=SupportsResponse.ONLY,
     )
-    for command in (ws_snapshot, ws_history, ws_daily_facts, ws_attention, ws_episode, ws_handle):
+
+    async def generate_report(call):
+        await _require_admin(hass, call)
+        try:
+            day = requested_day(call.data.get("date"), hass.config.time_zone) or previous_day(
+                time.time(), hass.config.time_zone
+            )
+            return await coordinator(hass).reports.generate(
+                call.data["policy_id"],
+                call.data["ai_task_entity"],
+                day,
+                call.context,
+                call.data.get("force", False),
+            )
+        except (ValueError, RuntimeError) as error:
+            raise HomeAssistantError(str(error)) from error
+
+    hass.services.async_register(
+        DOMAIN,
+        "generate_report",
+        generate_report,
+        schema=vol.Schema(
+            {
+                vol.Required("policy_id"): cv.string,
+                vol.Required("ai_task_entity"): cv.entity_domain("ai_task"),
+                vol.Optional("date"): cv.string,
+                vol.Optional("force", default=False): cv.boolean,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    for command in (
+        ws_snapshot,
+        ws_history,
+        ws_daily_facts,
+        ws_attention,
+        ws_episode,
+        ws_handle,
+        ws_report,
+    ):
         websocket_api.async_register_command(hass, command)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "home_insights/report",
+        vol.Required("policy_id"): str,
+        vol.Optional("due_time", default="08:00"): str,
+        vol.Optional("grace_minutes", default=10): vol.All(int, vol.Range(min=0, max=60)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_report(hass, connection, msg):
+    try:
+        result = await coordinator(hass).reports.read(
+            msg["policy_id"], msg["due_time"], msg["grace_minutes"]
+        )
+    except ValueError as error:
+        connection.send_error(msg["id"], "report_unavailable", str(error))
+    else:
+        connection.send_result(msg["id"], result)
 
 
 @websocket_api.websocket_command({vol.Required("type"): "home_insights/snapshot"})

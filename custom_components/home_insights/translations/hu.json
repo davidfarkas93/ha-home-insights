@@ -80,6 +80,24 @@
           "name": "expected_hash"
         }
       }
+    },
+    "generate_report": {
+      "name": "Előző napi jelentés készítése",
+      "description": "Kanonikus HA-tényadatok értelmezése eszközök nélküli AI Taskkal; a próbálkozás és az eredmény külön mentődik.",
+      "fields": {
+        "policy_id": {
+          "name": "Szabálykészlet"
+        },
+        "ai_task_entity": {
+          "name": "AI Task entitás"
+        },
+        "date": {
+          "name": "Lezárult nap (alapértelmezés: tegnap)"
+        },
+        "force": {
+          "name": "Meglévő eredmény újragenerálása"
+        }
+      }
     }
   }
 }

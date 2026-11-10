@@ -8,7 +8,44 @@ and Luma dashboard integration.
 explicitly, then bind a compatible Luma frontend to its ID. The integration observes
 its source entities without a browser and journals stable policy episodes separately
 from native source evidence. Installing alone changes no dashboard or automation.
-It does not enable an AI provider or replace the existing daily-report automation.
+It does not automatically configure an AI provider or replace a daily-report automation.
+
+## Morning reports (v0.4)
+
+The `home_insights.generate_report` action takes `policy_id`, `ai_task_entity`,
+optional completed local `date` (yesterday by default), and `force` (default false).
+Call it from a native HA time-triggered automation or its existing script. Successful
+results for the same policy/day are reused unless explicitly forced. Overlapping
+runs are refused. No scheduler or device/configuration action is added inside the integration.
+
+The integration persists the attempt before collecting canonical facts. It stores
+the fact bundle separately from the AI narrative and keeps failed/missing/interrupted
+attempts distinct from the last successful result. Attempts survive reload/restart;
+an interrupted run becomes failed, not successful. AI calls time out after two minutes.
+When the observer did not run, the report records that fact without asking AI to guess.
+
+The existing native OpenAI **AI Task** is the currently verified provider. Each call
+checks the loaded entity type and rejects provider web-search, code-interpreter or
+HA API tool options. The native AI Task receives `llm_api=None`, no attachments and
+a bounded fact bundle. No MCP tools, device controls, shell, configuration or firmware
+capability is passed to it. Other providers require an explicit capability review.
+No new OpenAI credential or direct OpenAI SDK client is created.
+
+AI returns a short Hungarian summary, optional hypothesis/check and evidence references.
+Unknown references and numeric claims are rejected; measured counts/coverage are
+rendered separately. URLs are removed from the bounded input projection. Source
+messages and household notes are data, not executable instructions or automatic exceptions.
+
+`home_insights/report` is an administrator-only read endpoint: `policy_id`, optional
+`due_time` (`08:00` by default) and `grace_minutes` (default 10). Its state distinguishes
+waiting, running, missed, stalled, failed, no observation, insufficient data, findings
+and no anomaly. The expected period and schedule use HA's timezone. A prior successful
+result cannot mask a missing current run. The schedule supplied by the dashboard must
+match the native automation. Luma 0.50 provides `custom:luma-daily-report-card`.
+
+Report facts and attempts stay in the integration's private SQLite journal and are
+not placed in giant Recorder sensor attributes or MQTT messages. The existing raw
+facts endpoint remains available; installing alone does not rewrite an automation.
 
 ## Shared Luma policies
 
@@ -68,7 +105,7 @@ or non-dismissible sources cannot be snoozed.
 Entity sources require HA read permission; writing handling additionally requires
 control permission. Non-entity native channels require an administrator. Raw linked
 source context is not exposed through this history projection. These APIs have no
-device or configuration actions. The morning AI/report pipeline is still separate.
+device or configuration actions. The morning AI/report pipeline above uses this same journal.
 
 ## What runs, and where?
 

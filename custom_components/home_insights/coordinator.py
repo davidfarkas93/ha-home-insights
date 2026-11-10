@@ -26,6 +26,7 @@ from .const import DOMAIN, HEARTBEAT_SECONDS, QUEUE_LIMIT
 from .daily_attention import daily_attention
 from .journal import Journal
 from .models import previous_day
+from .reporting import ReportManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class Coordinator:
         self.worker: asyncio.Task | None = None
         self.journal: Journal | None = None
         self.attention = AttentionRuntime(self)
+        self.reports = ReportManager(self)
 
     async def execute(self, function, *args):
         return await self.hass.loop.run_in_executor(self.pool, partial(function, *args))
@@ -321,6 +323,7 @@ class Coordinator:
         if self.closed:
             return
         self.closed = True
+        await self.reports.close()
         await self.attention.close()
         for remover in [*self.removers, *self.entry_watchers.values()]:
             remover()

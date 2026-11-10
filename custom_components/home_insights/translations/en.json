@@ -80,6 +80,24 @@
           "name": "expected_hash"
         }
       }
+    },
+    "generate_report": {
+      "name": "Generate previous-day report",
+      "description": "Interpret canonical facts using a tool-free AI Task; persist attempt and successful result separately.",
+      "fields": {
+        "policy_id": {
+          "name": "Policy ID"
+        },
+        "ai_task_entity": {
+          "name": "AI Task entity"
+        },
+        "date": {
+          "name": "Completed day (default yesterday)"
+        },
+        "force": {
+          "name": "Regenerate an existing result"
+        }
+      }
     }
   }
 }

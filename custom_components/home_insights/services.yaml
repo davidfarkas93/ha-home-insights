@@ -1,3 +1,23 @@
+generate_report:
+  fields:
+    policy_id:
+      required: true
+      selector:
+        text:
+    ai_task_entity:
+      required: true
+      selector:
+        entity:
+          domain: ai_task
+    date:
+      required: false
+      selector:
+        date:
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:
 set_attention_policy:
   fields:
     policy_id:

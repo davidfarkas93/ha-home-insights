@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from .handling import setup_storage
 from .models import Observation, canonical, daily_window, digest, iso
+from .report_store import setup_reports
 
 SOURCE_REMOVALS = {
     "notifications": "notification_removed",
@@ -58,6 +59,7 @@ class Journal:
           PRAGMA user_version=1;
         """)
         setup_storage(self.db)
+        setup_reports(self.db, now)
         self.run_id = str(uuid4())
         self.policy_hash = digest(policy)
         self.baselines: set[str] = set()
