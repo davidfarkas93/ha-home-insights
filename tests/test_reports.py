@@ -215,11 +215,28 @@ def test_output_references_and_numbers_are_validated():
     data["episodes"][0]["name"] = "Router 2"
     bundle = reporting.evidence_bundle(data)
     assert reporting.validate_narrative(
-        {**TEXT, "summary": "Router 2 kapcsolatát érdemes megnézni."}, bundle
+        {**TEXT, "summary": "Router 2 jelzését érdemes megnézni."}, bundle
     )
     data = facts()
     data["episodes"][0]["message"] = "See https://example.test/?token=SECRET"
     assert "SECRET" not in reporting.instructions(reporting.evidence_bundle(data))
+
+
+def test_observation_attribution_partial_prefix_and_informal_voice():
+    data = facts("insufficient_data")
+    data["data_quality"] = "insufficient_data"
+    bundle = reporting.evidence_bundle(data)
+    result = reporting.validate_narrative(TEXT, bundle)
+    assert result["summary"].startswith("Az előző nap csak részben volt megfigyelve.")
+    assert not result["hypothesis"]
+    for changes in (
+        {"summary": "A termelés elmaradása hatással lehet az energiaellátásra."},
+        {"suggested_check": "Ellenőrizze a rendszer beállításait."},
+        {"hypothesis": "A leállást hálózati hiba okozhatta."},
+        {"evidence_ids": "", "suggested_check": ""},
+    ):
+        with pytest.raises(ValueError):
+            reporting.validate_narrative({**TEXT, **changes}, bundle)
 
 
 async def test_actual_native_ai_task_api_has_no_llm_api_attachments_or_provider_tools(hass):

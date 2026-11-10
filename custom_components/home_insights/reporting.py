@@ -124,13 +124,17 @@ def instructions(bundle):
     return """
 Írj rövid magyar reggeli visszatekintést kizárólag az előző helyi naptári nap alábbi HA-
 tényeiből.
-A summary legfeljebb két rövid mondat: a legfontosabb megfigyelés és annak gyakorlati
-jelentősége.
-A hypothesis csak feltételezett magyarázat, nem igazolt ok; ha nincs alapja, legyen üres.
+A summary egyetlen rövid, tárgyilagos mondat a legfontosabb HA-jelzésről.
+Tegező magyar szöveget írj, például: "Nézd meg...", "Ellenőrizd...".
+A HA-jelzést nevezd meg. Fizikai hibát csak független mérés igazolhat.
+Használj forráshoz kötött megfogalmazást: "jelzése aktív volt", "eltérést jelzett".
+Ne egészítsd ki energiaellátási, teljesítménybeli vagy más általános hatás feltételezésével.
+Operatív jelzés mellett ne emeld ki a sikeres indulási értesítéseket és rutinfrissítéseket.
+A hypothesis csak különböző forrásokkal alátámasztható összefüggés lehet; különben üres.
 A suggested_check legfeljebb egy konkrét, biztonságos ellenőrzési javaslat; ha nincs teendő,
 legyen üres.
-Az evidence_ids mezőbe a használt evidence.ref azonosítókat írd vesszővel elválasztva, vagy
-üres szöveget.
+Az evidence_ids mezőbe csak a ténylegesen használt, legfeljebb két evidence.ref kerüljön.
+Nem kell az összes átadott forrást felsorolnod.
 Ne számolj, ne becsülj, ne írj számjegyes számlálót, százalékot vagy időtartamot: a mért
 számok külön jelennek meg.
 Az eszköznevek számjegyei megmaradhatnak. Ne állíts mai állapotot tegnapi eseményből.
@@ -139,8 +143,8 @@ Az initial első észlelés, nem bizonyított új meghibásodás. A present_at_p
 Az ismétlődés, a frissítés és az információs értesítés különbözik a működési hibától.
 Az értesítés eltávolítása és a felhasználó javításjelzése nem igazolja a forrás
 rendeződését.
-Insufficient_data mellett mondd ki a részleges megfigyelést; ne állíts általános
-hibamentességet vagy teljes napos ellenőrzést.
+A részleges megfigyelést a rendszer külön, biztos szöveggel jelzi; ezt ne ismételd.
+Insufficient_data mellett ne állíts általános hibamentességet vagy teljes napos ellenőrzést.
 Ne ismételd új hibaként a változatlan tartós ügyet. Csak a bizonyítékokból alátámasztható
 eltérést emeld ki.
 A háttértudás feltételei és korlátai számítanak; a megjegyzés nem jóváhagyott kivétel.
@@ -173,15 +177,34 @@ def validate_narrative(value, bundle):
     refs = [v.strip() for v in result.pop("evidence_ids").split(",") if v.strip()]
     if any(ref not in allowed for ref in refs):
         raise ValueError("Unknown evidence reference")
+    if len(set(refs)) > 2:
+        raise ValueError("Reference only the observations actually discussed")
+    if not refs and any(
+        e.get("kind") in ("incident", "repair", "integration") for e in bundle["evidence"]
+    ):
+        raise ValueError("Operational signals require an evidence reference")
+    selected = [e for e in bundle["evidence"] if e["ref"] in refs]
+    if selected and not re.search(r"jelz|észlel|megfigy", result["summary"], re.IGNORECASE):
+        raise ValueError("Describe the observation, not an unverified physical diagnosis")
+    if result["hypothesis"] and len({e.get("source") for e in selected}) < 2:
+        raise ValueError("A hypothesis needs independent source evidence")
     text = " ".join(result.values())
     for evidence in bundle["evidence"]:
         for key in ("name", "source"):
             if evidence.get(key):
-                text = text.replace(evidence[key], "")
+                text = re.sub(re.escape(evidence[key]), "", text, flags=re.IGNORECASE)
     if re.search(r"\d", text):
         raise ValueError("AI must not invent numeric facts")
     if (result["hypothesis"] or result["suggested_check"]) and not refs:
         raise ValueError("Explanation requires evidence")
+    if re.search(
+        r"\b(ellenőrizze|nézze|vizsgálja|hasonlítsa|tekintse)\b",
+        result["suggested_check"],
+        re.IGNORECASE,
+    ):
+        raise ValueError("Use the household's informal Hungarian voice")
+    if bundle["data_quality"] != "complete":
+        result["summary"] = "Az előző nap csak részben volt megfigyelve. " + result["summary"]
     return {**result, "evidence_refs": list(dict.fromkeys(refs))}
 
 
@@ -283,6 +306,12 @@ class ReportManager:
                     error = "invalid_ai_output"
                     narrative = validate_narrative(response.data, bundle)
                     skipped = False
+                facts["ai_evidence"] = [
+                    e for e in bundle["evidence"] if e["ref"] in narrative["evidence_refs"]
+                ]
+                await self.owner.execute(
+                    report_store.save_report_facts, self.owner.journal, attempt["id"], facts
+                )
                 result = await self.owner.execute(
                     report_store.finish_report,
                     self.owner.journal,
