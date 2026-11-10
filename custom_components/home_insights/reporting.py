@@ -13,9 +13,19 @@ from . import report_store
 from .models import canonical, previous_day
 
 TIMEOUT = 120
-STRUCTURE = vol.Schema(
-    {vol.Required(key): str for key in ("summary", "hypothesis", "suggested_check", "evidence_ids")}
-)
+
+
+def output_schema(bundle):
+    return vol.Schema(
+        {
+            vol.Required("summary"): str,
+            vol.Required("hypothesis"): vol.In([""]),
+            vol.Required("suggested_check"): vol.In(
+                [""] + [c["text"] for c in bundle["permitted_checks"]]
+            ),
+            vol.Required("evidence_ids"): str,
+        }
+    )
 
 
 def clean_text(value, limit=500):
@@ -95,6 +105,21 @@ def evidence_bundle(facts):
         for n in facts.get("handling_events", [])[:10]
     ]
     return {
+        "permitted_checks": [
+            {
+                "ref": e["ref"],
+                "text": e["name"]
+                + ": "
+                + (
+                    "nézd át az értesítés részleteit."
+                    if e.get("kind") == "notification"
+                    else "nézd át a kiadási megjegyzéseket."
+                    if e.get("category") == "updates"
+                    else "nézd meg az előző napi állapotelőzményeket és a jelzés részleteit."
+                ),
+            }
+            for e in evidence
+        ],
         "day": facts["day"],
         "timezone": facts["timezone"],
         "assessment": facts["assessment"],
@@ -130,9 +155,10 @@ A HA-jelzést nevezd meg. Fizikai hibát csak független mérés igazolhat.
 Használj forráshoz kötött megfogalmazást: "jelzése aktív volt", "eltérést jelzett".
 Ne egészítsd ki energiaellátási, teljesítménybeli vagy más általános hatás feltételezésével.
 Operatív jelzés mellett ne emeld ki a sikeres indulási értesítéseket és rutinfrissítéseket.
-A hypothesis csak különböző forrásokkal alátámasztható összefüggés lehet; különben üres.
-A suggested_check legfeljebb egy konkrét, biztonságos ellenőrzési javaslat; ha nincs teendő,
-legyen üres.
+A hypothesis legyen üres: a jelzésnapló önmagában nem tartalmaz okot igazoló mérést.
+A suggested_check pontosan egy permitted_checks.text legyen, vagy üres szöveg.
+Új mérést, szolgáltatást vagy tetszőleges javaslatot nem nevezhetsz meg.
+Csak a ténylegesen tárgyalt megfigyelések ref-jei kerüljenek az evidence_ids-be.
 Az evidence_ids mezőbe csak a ténylegesen használt, legfeljebb két evidence.ref kerüljön.
 Nem kell az összes átadott forrást felsorolnod.
 Ne számolj, ne becsülj, ne írj számjegyes számlálót, százalékot vagy időtartamot: a mért
@@ -183,11 +209,27 @@ def validate_narrative(value, bundle):
         e.get("kind") in ("incident", "repair", "integration") for e in bundle["evidence"]
     ):
         raise ValueError("Operational signals require an evidence reference")
+    check = next(
+        (
+            c
+            for c in bundle["permitted_checks"]
+            if c["text"].casefold() == result["suggested_check"].casefold() and c["ref"] in refs
+        ),
+        None,
+    )
+    if result["suggested_check"] and (check is None or check["ref"] not in refs):
+        raise ValueError("Choose a check bound to an actual evidence source")
+    result["suggested_check"] = check["text"] if check else ""
+    result["hypothesis"] = ""
     selected = [e for e in bundle["evidence"] if e["ref"] in refs]
+    if any(
+        e["ref"] != (check or {}).get("ref")
+        and e["name"].casefold() not in result["summary"].casefold()
+        for e in selected
+    ):
+        raise ValueError("Do not cite unrelated evidence")
     if selected and not re.search(r"jelz|észlel|megfigy", result["summary"], re.IGNORECASE):
         raise ValueError("Describe the observation, not an unverified physical diagnosis")
-    if result["hypothesis"] and len({e.get("source") for e in selected}) < 2:
-        raise ValueError("A hypothesis needs independent source evidence")
     text = " ".join(result.values())
     for evidence in bundle["evidence"]:
         for key in ("name", "source"):
@@ -232,7 +274,7 @@ async def summarize(hass, entity_id, bundle, context):
         entity_id=entity_id,
         task_name="Előző napi otthoni rendszerjelentés",
         instructions=instructions(bundle),
-        structure=STRUCTURE,
+        structure=output_schema(bundle),
         llm_api=None,
         attachments=None,
         context=context,

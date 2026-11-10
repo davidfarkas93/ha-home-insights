@@ -21,7 +21,7 @@ POLICY = {"version": 1, "revision": "reports.1", "rules": []}
 TEXT = {
     "summary": "A kazán jelzése az előző napról húzódik át.",
     "hypothesis": "",
-    "suggested_check": "Nézd meg a kazán hibanaplóját.",
+    "suggested_check": "Kazán: nézd meg az előző napi állapotelőzményeket és a jelzés részleteit.",
     "evidence_ids": "episode_1",
 }
 
@@ -215,7 +215,12 @@ def test_output_references_and_numbers_are_validated():
     data["episodes"][0]["name"] = "Router 2"
     bundle = reporting.evidence_bundle(data)
     assert reporting.validate_narrative(
-        {**TEXT, "summary": "Router 2 jelzését érdemes megnézni."}, bundle
+        {
+            **TEXT,
+            "summary": "Router 2 jelzését érdemes megnézni.",
+            "suggested_check": bundle["permitted_checks"][0]["text"],
+        },
+        bundle,
     )
     data = facts()
     data["episodes"][0]["message"] = "See https://example.test/?token=SECRET"
@@ -232,7 +237,7 @@ def test_observation_attribution_partial_prefix_and_informal_voice():
     for changes in (
         {"summary": "A termelés elmaradása hatással lehet az energiaellátásra."},
         {"suggested_check": "Ellenőrizze a rendszer beállításait."},
-        {"hypothesis": "A leállást hálózati hiba okozhatta."},
+        {"suggested_check": "Ellenőrizd a beérkező Sunlight adatokat."},
         {"evidence_ids": "", "suggested_check": ""},
     ):
         with pytest.raises(ValueError):
@@ -268,6 +273,28 @@ async def test_actual_native_ai_task_api_has_no_llm_api_attachments_or_provider_
                 )
         assert call.await_count == 1
     assert not reporting.readonly_provider(SimpleNamespace(subentry=SimpleNamespace(data={})))
+
+
+def test_output_schema_checks_are_bound_and_repeated_source_names_are_valid():
+    import probatio
+    from homeassistant.helpers import llm
+
+    data = facts()
+    data["episodes"].append({**data["episodes"][0], "id": "second"})
+    bundle = reporting.evidence_bundle(data)
+    schema = probatio.to_openapi(
+        reporting.output_schema(bundle),
+        custom_serializer=llm.selector_serializer,
+        openapi_version="3.1.0",
+    )
+    assert schema["properties"]["hypothesis"]["enum"] == [""]
+    assert set(schema["properties"]["suggested_check"]["enum"]) == {
+        "",
+        *[c["text"] for c in bundle["permitted_checks"]],
+    }
+    assert reporting.validate_narrative({**TEXT, "evidence_ids": "episode_2"}, bundle)[
+        "evidence_refs"
+    ] == ["episode_2"]
 
 
 async def test_service_and_private_report_ws_require_admin(hass):

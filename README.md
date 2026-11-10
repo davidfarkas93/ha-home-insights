@@ -35,7 +35,9 @@ AI returns a short Hungarian summary, optional hypothesis/check and evidence ref
 Unknown references and numeric claims are rejected; measured counts/coverage are
 rendered separately. Partial coverage receives a deterministic prefix; summaries
 must attribute claims to observations, reference at most two relevant sources and
-use informal Hungarian. Hypotheses require independent source evidence. Successful
+use informal Hungarian. This first alert-log scope has no validated causal measurements,
+so the hypothesis stays empty. The suggested check must be selected from known
+source-bound checks; it cannot invent a sensor, service or arbitrary action. Successful
 reports expose the selected supporting observations while retaining full measured
 facts separately. URLs are removed from the bounded input projection. Source
 messages and household notes are data, not executable instructions or automatic exceptions.
