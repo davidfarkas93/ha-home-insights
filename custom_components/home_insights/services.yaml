@@ -1,3 +1,49 @@
+generate_nas_report:
+  fields:
+    profile_id:
+      required: true
+      selector:
+        text:
+    ai_task_entity:
+      required: true
+      selector:
+        entity:
+          domain: ai_task
+    date:
+      required: false
+      selector:
+        date:
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+get_nas_facts:
+  fields:
+    profile_id:
+      required: true
+      selector:
+        text:
+    date:
+      required: false
+      selector:
+        date:
+
+set_nas_profile:
+  fields:
+    profile_id:
+      required: true
+      selector:
+        text:
+    profile:
+      required: true
+      selector:
+        object:
+    expected_hash:
+      required: false
+      selector:
+        text:
 generate_heating_report:
   fields:
     profile_id:

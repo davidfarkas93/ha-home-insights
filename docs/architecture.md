@@ -150,3 +150,19 @@ No delivery receipt, seen flag, user-claimed fix or approved normality is fabric
 - [HA event subscriptions](https://contributors.home-assistant.io/core/integrations/events/)
 - [Keep blocking I/O out of HA's event loop](https://contributors.home-assistant.io/core/internals/blocking-operations/)
 - Pinned HA 2026.11.1 source is authoritative for the native adapter compatibility tests.
+
+## v0.8 NAS scope and rejection evidence
+
+NAS profiles are native Store settings with guarded replacement and explicit source
+semantics. The shared read-only Recorder adapter runs queries and NAS computation
+on Recorder's executor. Source limits, trusted run boundaries, unknown states,
+standby semantics, measured UPS intervals and sustained-temperature heuristics are
+independent of AI. `nas:` keys isolate this fourth report scope. The shared
+constrained interpretation helper derives citations/checks from measured statements.
+No device, shell, firmware or configuration tool is exposed to AI.
+
+Report attempts add nullable private validation diagnostics through an idempotent
+SQLite migration on the dedicated journal executor. Stable error codes and bounded
+redacted candidates support debugging without publishing rejected content or logging
+provider secrets. Existing failed attempts retain their original uncertainty.
+Read metadata includes the authenticated actor; it never changes source truth.

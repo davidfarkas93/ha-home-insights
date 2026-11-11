@@ -16,6 +16,9 @@ def setup_reports(db, now):
       CREATE INDEX IF NOT EXISTS report_policy_day ON reports(policy,day,started DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS report_running ON reports(policy) WHERE status='running';
     """)
+    if "diagnostics" not in {r["name"] for r in db.execute("PRAGMA table_info(reports)")}:
+        with db:
+            db.execute("ALTER TABLE reports ADD COLUMN diagnostics TEXT")
     with db:
         db.execute(
             "UPDATE reports SET status='failed',ai_status='failed',error='interrupted',"
@@ -31,6 +34,7 @@ def decode(row):
         **dict(row),
         "facts": json.loads(row["facts"]) if row["facts"] else None,
         "narrative": json.loads(row["narrative"]) if row["narrative"] else None,
+        "diagnostics": json.loads(row["diagnostics"]) if row["diagnostics"] else None,
     }
 
 
@@ -71,11 +75,13 @@ def save_report_facts(journal, identifier, facts):
         )
 
 
-def finish_report(journal, identifier, now, narrative=None, error=None, skipped=False):
+def finish_report(
+    journal, identifier, now, narrative=None, error=None, skipped=False, diagnostics=None
+):
     db = journal.db
     with db:
         changed = db.execute(
-            "UPDATE reports SET finished=?,status=?,ai_status=?,narrative=?,error=? "
+            "UPDATE reports SET finished=?,status=?,ai_status=?,narrative=?,error=?,diagnostics=? "
             "WHERE id=? AND status='running'",
             (
                 now,
@@ -83,6 +89,7 @@ def finish_report(journal, identifier, now, narrative=None, error=None, skipped=
                 "failed" if error else "skipped" if skipped else "success",
                 canonical(narrative) if narrative is not None else None,
                 error,
+                canonical(diagnostics) if diagnostics else None,
                 identifier,
             ),
         ).rowcount

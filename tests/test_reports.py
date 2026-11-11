@@ -87,7 +87,8 @@ async def test_generate_is_persisted_cached_and_only_interprets_prepared_facts(h
         await owner.async_close()
     reopened = await running_coordinator(hass, entry=owner.entry)
     try:
-        snapshot = await reopened.reports.read("demo")
+        with patch.object(reporting.time, "time", return_value=NOW):
+            snapshot = await reopened.reports.read("demo")
         assert snapshot["attempt"]["id"] == first["attempt"]["id"]
     finally:
         await reopened.async_close()

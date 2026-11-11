@@ -112,6 +112,7 @@ def handling_state(db, episode, before=None):
         state["revision"] = row["revision"]
         if row["operation"] == "seen":
             state["seen_at"] = row["at"]
+            state["seen_by"] = row["actor_name"]
         elif row["operation"] == "claimed_fixed":
             state["claimed_fixed_at"] = row["at"]
         elif row["operation"] in ("snooze", "unsnooze"):

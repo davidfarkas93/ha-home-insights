@@ -107,7 +107,7 @@ inferred. AI prioritizes constrained combinations of short, HA-verified statemen
 native output schema enumerates only those valid summaries; citations and a known
 measurement-bound check are derived from the selected statements. This prevents
 free prose from changing a median to a mean, inventing a cause, or citing unrelated
-measurements. NAS measurements remain a future scope.
+measurements. NAS measurements use the independent scope below.
 
 ## Heating morning reports (v0.7)
 
@@ -169,6 +169,57 @@ the permitted explanations. Backend-derived citations/checks cannot invent cause
 values, controls or device actions. No HA/MCP, firmware, shell or provider tools are
 passed to the task.
 
+## NAS morning reports (v0.8)
+
+`home_insights.set_nas_profile` stores an explicit v1 profile in native HA Store.
+It requires `revision`, four distinct `sources` (`array_running`, `parity_problem`,
+`parity_running`, `ups_status`) and 1–32 `disks`. Each disk has a stable `id`,
+`name`, binary problem `health` source, `temperature` (`entity`, optional
+`attribute`, explicit `unit` °C/°F) and `warn_celsius`. Optional
+`problem_sources` are binary problem indicators. `minimum_hot_seconds` defaults
+to 600; `parity_error_attribute` defaults to `errors`. These thresholds are
+review heuristics, not manufacturer fault limits. Replacements require the current
+hash from the administrator-only `home_insights/nas_profile` WebSocket command.
+No household mappings are included in the integration.
+
+`home_insights.get_nas_facts` reads `profile_id` and optional completed local `date`
+without AI or journal writes. `home_insights.generate_nas_report` adds
+`ai_task_entity` and optional `force`. Native HA owns the morning time trigger;
+`home_insights/report` accepts mutually exclusive `nas_profile` and isolates
+attempts and successes under `nas:` keys. Luma 0.55 supports the same selector.
+
+Native Recorder history and trusted run intervals establish known observation.
+Run boundaries break held values, counters and temperature continuity; recovery
+is not a new UPS/parity start. DST days use actual local midnight boundaries.
+Array stopped time is distinct from a physical fault; a running parity check is
+activity, not a problem. The largest reported parity error counter can belong to
+an earlier check and is not the number of new daily errors. Disk maximum values
+retain their original recording timestamps. Only sustained observed temperature
+at/above the configured threshold creates a temperature finding. Explicit standby
+can explain absent temperature; unknown or standby never becomes zero degrees.
+
+UPS interpretation uses [NUT status tokens](https://networkupstools.org/docs/user-manual.chunked/ar01s06.html).
+Known battery intervals, observed entry edges and warning flags are separate;
+battery operation alone does not prove a grid outage. This is a selected-source
+retrospective, not a complete SMART, hardware or power-quality audit.
+
+Assessment and quality remain separate: no observation is `not_run`, unknown
+intervals remain insufficient, brief non-critical gaps can be disclosed as
+`minor_gaps`, and confirmed findings retain their quality warning. Partial durations
+and edge counts are observed lower bounds. The same verified tool-free native AI
+Task selects up to two measured source-bound statements; it cannot invent causes,
+measurements, controls or repair operations.
+
+## Private AI validation diagnostics (v0.8)
+
+Rejected responses retain a stable reason code, trusted validator explanation,
+bounded/redacted response preview, permitted evidence references and checks in the
+private report attempt. The administrator-only detail API exposes this separately
+from any published narrative. URLs and recognizable secrets are redacted; full
+responses/prompts are never written to system logs. The idempotent nullable database
+migration leaves old attempts without invented diagnostic reasons. A rejected current
+response never replaces the last successful report or appears as a successful summary.
+
 ## Shared Luma policies
 
 The response-only administrator action `home_insights.set_attention_policy` accepts
@@ -225,7 +276,10 @@ or non-dismissible sources cannot be snoozed.
 
 `home_insights/episode` exposes bounded, cursor-paginated, plain-text event history.
 Entity sources require HA read permission; writing handling additionally requires
-control permission. Non-entity native channels require an administrator. Raw linked
+control permission. Non-entity native channels require an administrator.
+`seen` records review time and authenticated actor; it does not hide or resolve
+a source. Snoozed episodes stay in the journal but are absent from the main hero
+and default active list; the explicit Snoozed filter permits restoration. Raw linked
 source context is not exposed through this history projection. These APIs have no
 device or configuration actions. The morning AI/report pipeline above uses this same journal.
 

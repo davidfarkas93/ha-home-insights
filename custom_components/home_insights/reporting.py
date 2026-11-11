@@ -9,13 +9,15 @@ from zoneinfo import ZoneInfo
 
 import probatio as vol
 
-from . import energy_reporting, heating_reporting, report_store
+from . import energy_reporting, heating_reporting, nas_reporting, report_diagnostics, report_store
 from .models import canonical, previous_day
 
 TIMEOUT = 120
 
 
 def output_schema(bundle):
+    if bundle.get("scope") == "nas_health":
+        return nas_reporting.output_schema(bundle)
     if bundle.get("scope") == "heating_cycles":
         return heating_reporting.output_schema(bundle)
     if bundle.get("scope") == "energy_statistics":
@@ -40,6 +42,8 @@ def clean_text(value, limit=500):
 
 
 def evidence_bundle(facts):
+    if facts.get("scope") == "nas_health":
+        return nas_reporting.evidence_bundle(facts)
     if facts.get("scope") == "heating_cycles":
         return heating_reporting.evidence_bundle(facts)
     if facts.get("scope") == "energy_statistics":
@@ -154,6 +158,8 @@ def evidence_bundle(facts):
 
 
 def instructions(bundle):
+    if bundle.get("scope") == "nas_health":
+        return nas_reporting.instructions(bundle)
     if bundle.get("scope") == "heating_cycles":
         return heating_reporting.instructions(bundle)
     if bundle.get("scope") == "energy_statistics":
@@ -193,6 +199,8 @@ HA-tényadatok:\n""" + canonical(bundle)
 
 
 def validate_narrative(value, bundle):
+    if bundle.get("scope") == "nas_health":
+        return nas_reporting.validate_narrative(value, bundle)
     if bundle.get("scope") == "heating_cycles":
         return heating_reporting.validate_narrative(value, bundle)
     if bundle.get("scope") == "energy_statistics":
@@ -289,7 +297,9 @@ async def summarize(hass, entity_id, bundle, context):
         hass,
         entity_id=entity_id,
         task_name=(
-            "Előző napi fűtési visszatekintés"
+            "Előző napi NAS- és UPS-visszatekintés"
+            if bundle.get("scope") == "nas_health"
+            else "Előző napi fűtési visszatekintés"
             if bundle.get("scope") == "heating_cycles"
             else "Előző napi energiamérleg"
             if bundle.get("scope") == "energy_statistics"
@@ -313,9 +323,12 @@ class ReportManager:
         self.owner.data = await self.owner.execute(self.owner.journal.snapshot)
         self.owner._notify()
 
-    def scope_key(self, policy, energy_profile, heating_profile=None):
-        if sum(v is not None for v in (policy, energy_profile, heating_profile)) != 1:
+    def scope_key(self, policy, energy_profile, heating_profile=None, nas_profile=None):
+        if sum(v is not None for v in (policy, energy_profile, heating_profile, nas_profile)) != 1:
             raise ValueError("Select one report scope")
+        if nas_profile is not None:
+            self.owner.nas.get_profile(nas_profile)
+            return "nas:" + nas_profile
         if heating_profile is not None:
             self.owner.heating.get_profile(heating_profile)
             return "heating:" + heating_profile
@@ -338,8 +351,9 @@ class ReportManager:
         *,
         energy_profile=None,
         heating_profile=None,
+        nas_profile=None,
     ):
-        policy = self.scope_key(policy, energy_profile, heating_profile)
+        policy = self.scope_key(policy, energy_profile, heating_profile, nas_profile)
         if self.owner.closed or self.owner.failed or not self.owner.started:
             raise RuntimeError("Journal is not recording")
         if policy in self.policies:
@@ -363,9 +377,13 @@ class ReportManager:
                 return value
             await self.notify()
             error = "collection_failed"
+            response = None
+            bundle = None
             try:
                 facts = (
-                    await self.owner.heating.facts(heating_profile, day)
+                    await self.owner.nas.facts(nas_profile, day)
+                    if nas_profile is not None
+                    else await self.owner.heating.facts(heating_profile, day)
                     if heating_profile is not None
                     else await self.owner.energy.facts(energy_profile, day)
                     if energy_profile is not None
@@ -454,6 +472,10 @@ class ReportManager:
                     time.time(),
                     None,
                     error,
+                    False,
+                    report_diagnostics.rejection(exception, getattr(response, "data", None), bundle)
+                    if error == "invalid_ai_output" and response is not None and bundle is not None
+                    else None,
                 )
             await self.notify()
             return {"cached": False, "attempt": result}
@@ -462,9 +484,16 @@ class ReportManager:
             self.policies.discard(policy)
 
     async def read(
-        self, policy, due_time="08:00", grace=10, *, energy_profile=None, heating_profile=None
+        self,
+        policy,
+        due_time="08:00",
+        grace=10,
+        *,
+        energy_profile=None,
+        heating_profile=None,
+        nas_profile=None,
     ):
-        policy = self.scope_key(policy, energy_profile, heating_profile)
+        policy = self.scope_key(policy, energy_profile, heating_profile, nas_profile)
         if not re.fullmatch(r"\d{2}:\d{2}", due_time):
             raise ValueError("Invalid due time")
         at = day_time.fromisoformat(due_time)
@@ -490,6 +519,7 @@ class ReportManager:
             "policy_id": policy,
             "energy_profile": energy_profile,
             "heating_profile": heating_profile,
+            "nas_profile": nas_profile,
             "timezone": zone,
             "expected_day": day.isoformat(),
             "generated_at": now,

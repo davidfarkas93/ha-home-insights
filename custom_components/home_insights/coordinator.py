@@ -28,6 +28,7 @@ from .energy import EnergyReports
 from .heating import HeatingReports
 from .journal import Journal
 from .models import previous_day
+from .nas import NasReports
 from .reporting import ReportManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class Coordinator:
         self.attention = AttentionRuntime(self)
         self.energy = EnergyReports(self)
         self.heating = HeatingReports(self)
+        self.nas = NasReports(self)
         self.reports = ReportManager(self)
 
     async def execute(self, function, *args):
@@ -68,6 +70,7 @@ class Coordinator:
         await self.attention.load()
         await self.energy.load()
         await self.heating.load()
+        await self.nas.load()
         policy = {
             "version": 1,
             "revision": "native-observers.1",

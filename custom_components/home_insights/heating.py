@@ -13,6 +13,7 @@ from homeassistant.helpers.storage import Store
 
 from .heating_analysis import CycleContext, append_interval, temperature
 from .models import daily_window, digest, iso
+from .recorder_history import read_recorder
 
 SOURCES = ("flame", "heating", "dhw", "connectivity")
 MAX_ROWS = 20000
@@ -317,49 +318,6 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
             "no_gas_consumption_or_room_comfort_inferred",
         ],
     }
-
-
-def read_recorder(hass, start, end, sources):
-    """Fixed version-pinned native Recorder reads on its executor; never raw SQL."""
-    from homeassistant.components.recorder.db_schema import RecorderRuns
-    from homeassistant.components.recorder.history import get_significant_states
-    from homeassistant.components.recorder.util import session_scope
-    from sqlalchemy import or_, select
-
-    history = get_significant_states(
-        hass,
-        start,
-        end,
-        sources,
-        include_start_time_state=True,
-        significant_changes_only=False,
-        no_attributes=False,
-    )
-    with session_scope(hass=hass, read_only=True) as session:
-        rows = (
-            session.execute(
-                select(RecorderRuns)
-                .where(
-                    RecorderRuns.start < end,
-                    or_(RecorderRuns.end.is_(None), RecorderRuns.end > start),
-                )
-                .order_by(RecorderRuns.start)
-                .limit(1001)
-            )
-            .scalars()
-            .all()
-        )
-        if len(rows) > 1000:
-            raise ValueError("Recorder run query exceeded its bounded budget")
-        runs = [
-            {
-                "start": stamp(r.start),
-                "end": stamp(r.end) if r.end else None,
-                "closed_incorrect": bool(r.closed_incorrect),
-            }
-            for r in rows
-        ]
-    return history, runs
 
 
 class HeatingReports:
