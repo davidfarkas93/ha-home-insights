@@ -54,7 +54,7 @@ async def test_real_flow_setup_sensor_creation_and_reload(full_hass):
     assert coordinator.data["status"] == "recording"
     registry = entity_registry.async_get(hass)
     entities = [item for item in registry.entities.values() if item.platform == "home_insights"]
-    assert len(entities) == 3
+    assert len(entities) == 4
     assert all(hass.states.get(item.entity_id) is not None for item in entities)
 
     from homeassistant.components import persistent_notification

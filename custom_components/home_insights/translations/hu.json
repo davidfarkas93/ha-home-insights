@@ -48,6 +48,9 @@
       },
       "last_observed_at": {
         "name": "Utolsó megfigyelés"
+      },
+      "weather_advice": {
+        "name": "Öltözködési tipp"
       }
     }
   },
@@ -183,6 +186,21 @@
         },
         "date": {
           "name": "Dátum"
+        },
+        "force": {
+          "name": "Újragenerálás"
+        }
+      }
+    },
+    "generate_weather_advice": {
+      "name": "Rövid öltözködési tipp készítése",
+      "description": "Mai előrejelzésből rövid, eszközök nélküli AI-tipp; éjfélkor vagy nyolc óra múlva lejár.",
+      "fields": {
+        "weather_entity": {
+          "name": "Időjárás"
+        },
+        "ai_task_entity": {
+          "name": "AI Task"
         },
         "force": {
           "name": "Újragenerálás"

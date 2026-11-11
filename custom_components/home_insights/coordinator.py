@@ -30,6 +30,7 @@ from .journal import Journal
 from .models import previous_day
 from .nas import NasReports
 from .reporting import ReportManager
+from .weather_advice import WeatherAdvice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ class Coordinator:
         self.heating = HeatingReports(self)
         self.nas = NasReports(self)
         self.reports = ReportManager(self)
+        self.weather_advice = WeatherAdvice(self)
 
     async def execute(self, function, *args):
         return await self.hass.loop.run_in_executor(self.pool, partial(function, *args))
@@ -71,6 +73,7 @@ class Coordinator:
         await self.energy.load()
         await self.heating.load()
         await self.nas.load()
+        await self.weather_advice.load()
         policy = {
             "version": 1,
             "revision": "native-observers.1",
@@ -332,6 +335,7 @@ class Coordinator:
         if self.closed:
             return
         self.closed = True
+        await self.weather_advice.close()
         await self.reports.close()
         await self.attention.close()
         for remover in [*self.removers, *self.entry_watchers.values()]:

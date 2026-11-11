@@ -236,6 +236,40 @@ responses/prompts are never written to system logs. The idempotent nullable data
 migration leaves old attempts without invented diagnostic reasons. A rejected current
 response never replaces the last successful report or appears as a successful summary.
 
+## Short clothing advice (v0.9)
+
+`home_insights.generate_weather_advice` accepts `weather_entity`, `ai_task_entity`
+and optional `force`. It reads the selected entity's native daily forecast and
+selects exactly today's row in HA's timezone. A forecast for tomorrow cannot fill
+missing data for today. Required daily low/high temperatures are converted to °C;
+optional wind, precipitation and current apparent temperature retain unknown values
+and explicit units. Location, entity names and arbitrary forecast attributes are
+not passed to AI. Daily minimums can include the night; no morning/afternoon timing
+or personal cold tolerance is inferred.
+
+The existing verified tool-free native OpenAI AI Task writes at most two short
+Hungarian sentences (15–200 characters), without numeric claims, URLs or markup.
+No new API key, model client or control/MCP tools are added. The native HA automation
+owns scheduling; opening the dashboard never calls AI. A valid result younger than
+four hours is reused unless forced, while display validity is at most eight hours
+and always ends at the next local midnight. This separates refresh cadence from
+expiry so a response finishing seconds after a scheduled run cannot skip the next
+six-hour refresh.
+
+Native HA Store keeps the small result, measured input and explicit failed/running
+attempt state across restart. Interrupted and rejected attempts never become ready;
+storage failures invalidate the in-memory text. The new household-facing clothing
+advice sensor exposes only the text and small freshness/source/status metadata,
+not raw forecasts or the private incident journal. Its visibility follows normal HA
+sensor permissions. This is practical forecast-based clothing guidance, not health
+or severe-weather safety advice. Admin users/native automations can generate it.
+
+Luma 0.56's optional `weather_advice_entity` renders a plain paragraph below the
+existing Home Hero weather line. Source, day and expiry are checked again in the
+browser; an explicit short unavailable message replaces stale/failed text. There
+is no additional card, modal, badge or report layout. Household entity mappings and
+schedules remain runtime configuration.
+
 ## Shared Luma policies
 
 The response-only administrator action `home_insights.set_attention_policy` accepts

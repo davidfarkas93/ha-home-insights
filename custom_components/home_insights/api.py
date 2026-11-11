@@ -39,6 +39,32 @@ async def _require_admin(hass: HomeAssistant, call: ServiceCall) -> None:
 
 
 async def async_setup(hass: HomeAssistant) -> None:
+    async def generate_weather_advice(call):
+        await _require_admin(hass, call)
+        try:
+            return await coordinator(hass).weather_advice.generate(
+                call.data["weather_entity"],
+                call.data["ai_task_entity"],
+                call.context,
+                call.data["force"],
+            )
+        except (ValueError, RuntimeError) as error:
+            raise HomeAssistantError(str(error)) from error
+
+    hass.services.async_register(
+        DOMAIN,
+        "generate_weather_advice",
+        generate_weather_advice,
+        schema=vol.Schema(
+            {
+                vol.Required("weather_entity"): cv.entity_domain("weather"),
+                vol.Required("ai_task_entity"): cv.entity_domain("ai_task"),
+                vol.Optional("force", default=False): cv.boolean,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
     async def get_daily_facts(call: ServiceCall):
         await _require_admin(hass, call)
         try:

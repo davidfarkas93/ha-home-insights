@@ -178,3 +178,20 @@ get_daily_facts:
       example: "2026-11-08"
       selector:
         date:
+
+generate_weather_advice:
+  fields:
+    weather_entity:
+      required: true
+      selector:
+        entity:
+          domain: weather
+    ai_task_entity:
+      required: true
+      selector:
+        entity:
+          domain: ai_task
+    force:
+      default: false
+      selector:
+        boolean:

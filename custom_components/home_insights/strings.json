@@ -48,6 +48,9 @@
       },
       "last_observed_at": {
         "name": "Last observation"
+      },
+      "weather_advice": {
+        "name": "Clothing advice"
       }
     }
   },
@@ -183,6 +186,21 @@
         },
         "date": {
           "name": "Date"
+        },
+        "force": {
+          "name": "Regenerate"
+        }
+      }
+    },
+    "generate_weather_advice": {
+      "name": "Generate clothing advice",
+      "description": "Short tool-free AI advice from today’s forecast; expires at midnight or after eight hours.",
+      "fields": {
+        "weather_entity": {
+          "name": "Weather entity"
+        },
+        "ai_task_entity": {
+          "name": "AI Task"
         },
         "force": {
           "name": "Regenerate"

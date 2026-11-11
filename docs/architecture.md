@@ -172,3 +172,13 @@ Warning events survive later recovery/removal. A separately dated, saved-at-gene
 `since_midnight` snapshot provides overnight context without rewriting the completed
 calendar day. AI chooses only measured chronology statements and cannot equate
 availability/clear flags or a running sync with restored parity protection.
+
+## v0.9 lightweight weather advice
+
+A separate native Store result and minimal public sensor carry today's short
+clothing advice. Native weather.get_forecasts supplies read-only forecast data;
+a strict day/unit projection feeds the existing verified tool-free AI Task. This
+is independent of retrospective incident/energy/heating/NAS report keys and the
+private journal. The administrator generation service exposes no generic tool.
+The frontend renders only a plain paragraph and rechecks source/day/expiry. Native
+HA time/start triggers own refresh; text cache age and display expiry are separate.
