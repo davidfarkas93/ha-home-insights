@@ -210,6 +210,22 @@ and edge counts are observed lower bounds. The same verified tool-free native AI
 Task selects up to two measured source-bound statements; it cannot invent causes,
 measurements, controls or repair operations.
 
+NAS profiles can additionally bind up to five `unraid_notifications` (`event.*`)
+sources. Recorder retains each notification's creation time, ID and bounded subject;
+replays after restart are deduplicated and retain their original calendar day.
+Parity-disk errors, array warnings, later clear feedback and parity-sync activity
+remain in a chronological timeline even after the entity or notification disappears.
+Unknown alert types remain warnings; notification removal never proves repair.
+A parity sync is distinct from a routine parity check. Prior-day warning events must
+be represented in the measured interpretation, even when current flags are clear.
+
+For yesterday's report, `since_midnight` separately snapshots events between today's
+local midnight and report generation. Its own AI field is constrained to a measured
+chronology statement; it cannot rewrite yesterday or assert restored parity protection.
+The card labels the time window and saved-at time explicitly; this is not live status.
+Historical reports do not silently attach events from a later date. Raw notification
+coverage is not a complete delivery log and remains explicitly limited.
+
 ## Private AI validation diagnostics (v0.8)
 
 Rejected responses retain a stable reason code, trusted validator explanation,

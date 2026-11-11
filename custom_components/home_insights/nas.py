@@ -3,6 +3,7 @@
 import asyncio
 import math
 import re
+import time
 from bisect import bisect_right
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -11,7 +12,8 @@ from functools import partial
 import probatio as vol
 from homeassistant.helpers.storage import Store
 
-from .models import daily_window, digest, iso
+from . import nas_events
+from .models import daily_window, digest, iso, previous_day
 from .recorder_history import read_recorder, stamp
 
 BINARY = vol.Match(r"^binary_sensor\.[a-z0-9_]+$")
@@ -38,6 +40,9 @@ PROFILE = vol.Schema(
             vol.Required("ups_status"): vol.Match(r"^sensor\.[a-z0-9_]+$"),
         },
         vol.Required("disks"): vol.All([DISK], vol.Length(min=1, max=32)),
+        vol.Optional("unraid_notifications", default=[]): vol.All(
+            [vol.Match(r"^event\.[a-z0-9_]+$")], vol.Length(max=5)
+        ),
         vol.Optional("problem_sources", default=[]): vol.All([BINARY], vol.Length(max=20)),
         vol.Optional("minimum_hot_seconds", default=600): vol.All(int, vol.Range(min=60, max=3600)),
         vol.Optional("parity_error_attribute", default="errors"): vol.All(
@@ -436,16 +441,31 @@ class NasReports:
         profile = deepcopy(self.get_profile(name)["profile"])
         zone = self.owner.hass.config.time_zone
         start, end = daily_window(day, zone)
-        job = partial(collect_facts, self.owner.hass, profile, name, day, zone, start, end)
+        now = time.time()
+        observed_until = now if previous_day(now, zone) == day else end
+        job = partial(
+            collect_facts, self.owner.hass, profile, name, day, zone, start, end, observed_until
+        )
         async with asyncio.timeout(60):
             return await get_instance(self.owner.hass).async_add_executor_job(job)
 
 
-def collect_facts(hass, profile, name, day, zone, start, end):
+def collect_facts(hass, profile, name, day, zone, start, end, observed_until):
     history, runs = read_recorder(
         hass,
         datetime.fromtimestamp(start - 3600, UTC),
-        datetime.fromtimestamp(end, UTC),
-        source_ids(profile),
+        datetime.fromtimestamp(observed_until, UTC),
+        sorted(set(source_ids(profile)) | set(profile["unraid_notifications"])),
     )
-    return compute_facts(profile, name, day, zone, history, runs)
+    facts = compute_facts(profile, name, day, zone, history, runs)
+    sources = profile["unraid_notifications"]
+    facts["notifications"] = nas_events.collect_events(history, sources, start, end)
+    if facts["notifications"]["attention"]:
+        facts["assessment"] = "attention_needed"
+    if facts["notifications"]["invalid_events"] or facts["notifications"]["truncated"]:
+        facts["data_quality"] = "insufficient_data"
+        if facts["assessment"] == "no_anomaly_found":
+            facts["assessment"] = "insufficient_data"
+    if observed_until > end:
+        facts["since_midnight"] = nas_events.collect_events(history, sources, end, observed_until)
+    return facts

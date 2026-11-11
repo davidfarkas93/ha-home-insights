@@ -252,7 +252,9 @@ def validate_narrative(value, bundle):
         for e in selected
     ):
         raise ValueError("Do not cite unrelated evidence")
-    if selected and not re.search(r"jelz|észlel|megfigy", result["summary"], re.IGNORECASE):
+    if selected and not re.search(
+        r"jelz|észlel|megfigy|felügyeleti probléma", result["summary"], re.IGNORECASE
+    ):
         raise ValueError("Describe the observation, not an unverified physical diagnosis")
     text = " ".join(result.values())
     for evidence in bundle["evidence"]:
@@ -432,6 +434,8 @@ class ReportManager:
                     error = "invalid_ai_output"
                     narrative = validate_narrative(response.data, bundle)
                     skipped = False
+                if skipped and bundle.get("scope") == "nas_health" and bundle.get("since_midnight"):
+                    narrative["summary_since_midnight"] = bundle["since_midnight"]["summary"]
                 facts["ai_evidence"] = [
                     e for e in bundle["evidence"] if e["ref"] in narrative["evidence_refs"]
                 ]

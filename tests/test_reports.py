@@ -321,3 +321,14 @@ async def test_service_and_private_report_ws_require_admin(hass):
             )
     finally:
         await owner.async_close()
+
+
+def test_monitoring_problem_is_explicit_observation_language_not_physical_diagnosis():
+    bundle = reporting.evidence_bundle(facts())
+    assert reporting.validate_narrative(
+        {**TEXT, "summary": "A Kazán felügyeleti probléma a megadott időszakban felmerült."}, bundle
+    )["evidence_refs"] == ["episode_1"]
+    with pytest.raises(ValueError):
+        reporting.validate_narrative(
+            {**TEXT, "summary": "A Kazán biztosan fizikailag meghibásodott."}, bundle
+        )

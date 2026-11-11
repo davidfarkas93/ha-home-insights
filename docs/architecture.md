@@ -166,3 +166,9 @@ SQLite migration on the dedicated journal executor. Stable error codes and bound
 redacted candidates support debugging without publishing rejected content or logging
 provider secrets. Existing failed attempts retain their original uncertainty.
 Read metadata includes the authenticated actor; it never changes source truth.
+
+NAS notification history preserves creation time and identity across restart replays.
+Warning events survive later recovery/removal. A separately dated, saved-at-generation
+`since_midnight` snapshot provides overnight context without rewriting the completed
+calendar day. AI chooses only measured chronology statements and cannot equate
+availability/clear flags or a running sync with restored parity protection.
