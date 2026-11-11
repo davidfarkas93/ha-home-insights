@@ -155,6 +155,9 @@ def test_forecast_day_is_not_inferred_from_utc_date_or_filled_from_tomorrow():
         {"text": "<b>Vegyél fel meleg kabátot.</b>"},
         {"text": "x" * 201},
         {"text": TEXT, "extra": True},
+        {"text": "Este esernyő is jól jöhet, mert csapadék várható."},
+        {"text": "Délelőtt meleg felsőt vegyél fel, délután már nem kell."},
+        {"text": "Ruházz be melegebb rétegekre és vigyél kabátot."},
     ],
 )
 def test_invalid_outputs_never_become_tip(value):
@@ -318,3 +321,20 @@ async def test_failed_hourly_collection_keeps_daily_tip_but_no_invented_periods(
             assert "SECRET" not in str(owner.weather_advice.data)
     finally:
         await owner.async_close()
+
+
+def test_persisted_tip_with_unsupported_timing_is_invalidated_before_cache_reuse():
+    owner = SimpleNamespace(
+        hass=SimpleNamespace(config=SimpleNamespace(time_zone="Europe/Budapest")),
+        entry=SimpleNamespace(entry_id="weather"),
+    )
+    with patch.object(w, "Store"):
+        advice = w.WeatherAdvice(owner)
+    advice.data = {
+        "status": "ready",
+        "text": "Este esernyő is jól jöhet, mert csapadék várható.",
+        "day": "2026-11-11",
+        "generated_at": NOW - 60,
+        "valid_until": NOW + 3600,
+    }
+    assert not advice.current(NOW)

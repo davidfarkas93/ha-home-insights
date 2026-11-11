@@ -478,3 +478,8 @@ The detailed weather prose in Luma is composed from these forecast values, inclu
 sunshine only at explicitly sunny forecast hours. There is no second AI call when
 opening the sheet. Existing v0.9 results are refreshed once rather than reused as
 if they contained the new hourly detail; scheduling and tool-free access are unchanged.
+
+In v0.10.1 the compact tip rejects time-of-day predictions, unqualified rain
+claims and shopping language. Persisted tips are validated before reuse, so an
+older unsupported timing claim cannot survive as a cached current result.
+Hourly detail remains composed from measured forecast points.
