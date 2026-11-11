@@ -106,5 +106,15 @@ class WeatherAdviceSensor(SensorEntity):
         data = self.coordinator.weather_advice.data
         return {
             key: data.get(key)
-            for key in ("status", "day", "generated_at", "valid_until", "weather_entity", "error")
+            for key in (
+                "status",
+                "day",
+                "generated_at",
+                "valid_until",
+                "weather_entity",
+                "error",
+                "forecast_detail_version",
+                "periods",
+                "hourly_status",
+            )
         }

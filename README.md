@@ -266,8 +266,8 @@ or severe-weather safety advice. Admin users/native automations can generate it.
 
 Luma 0.56's optional `weather_advice_entity` renders a plain paragraph below the
 existing Home Hero weather line. Source, day and expiry are checked again in the
-browser; an explicit short unavailable message replaces stale/failed text. There
-is no additional card, modal, badge or report layout. Household entity mappings and
+browser; an explicit short unavailable message replaces stale/failed text. In that original presentation there
+was no additional card, modal, badge or report layout; v0.10 adds optional hourly details. Household entity mappings and
 schedules remain runtime configuration.
 
 ## Shared Luma policies
@@ -458,3 +458,23 @@ bounded-queue loss, source recovery, permissions, persistence, pagination and DS
 They do not connect to a production HA instance or operate real devices.
 
 Architecture and the staged Luma migration: [docs/architecture.md](docs/architecture.md).
+
+
+### Hourly detail for clothing advice (v0.10)
+
+The same generation action additionally reads the native hourly forecast when the
+weather entity advertises hourly support. Today's remaining points are projected
+into morning (06–12), afternoon (12–18) and evening (18–24) in HA's timezone.
+Unknown units, temperatures and duplicate/ambiguous hours cannot fabricate data.
+Past periods remain elapsed, missing periods remain missing, and incomplete hourly
+sets are explicitly partial. Unknown precipitation or wind stays unknown. There is
+no historical weather claim and tomorrow's forecast never fills today's gaps.
+An hourly fetch failure keeps the daily clothing tip usable with unavailable detail.
+
+The public sensor adds only the three bounded period/sample projections and fixed
+hourly availability/version fields, never raw forecast attributes, location or
+private journal data. These same measured projections may inform the short AI tip.
+The detailed weather prose in Luma is composed from these forecast values, including
+sunshine only at explicitly sunny forecast hours. There is no second AI call when
+opening the sheet. Existing v0.9 results are refreshed once rather than reused as
+if they contained the new hourly detail; scheduling and tool-free access are unchanged.

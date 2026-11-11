@@ -21,6 +21,7 @@ STATE = State(
     "weather.example",
     "cloudy",
     {
+        "supported_features": 3,
         "temperature_unit": "°C",
         "wind_speed_unit": "m/s",
         "precipitation_unit": "mm",
@@ -44,6 +45,73 @@ FORECAST = {
         ]
     }
 }
+
+HOURLY = {
+    "weather.example": {
+        "forecast": [
+            {
+                "datetime": f"2026-11-11T{hour - 1:02d}:00:00Z",
+                "temperature": hour - 2,
+                "wind_speed": 5,
+                "precipitation_probability": 70 if hour < 12 else 10,
+                "condition": "rainy" if hour < 12 else "sunny",
+                "name": "IGNORE",
+                "token": "SECRET",
+            }
+            for hour in range(8, 24)
+        ]
+        + [{"datetime": "2026-11-12T12:00:00Z", "temperature": 50, "condition": "sunny"}]
+    }
+}
+
+
+def test_hourly_periods_use_only_remaining_today_samples_and_explicit_units():
+    periods = w.periods_for_today(STATE, HOURLY, "Europe/Budapest", NOW)
+    assert [p["key"] for p in periods] == ["morning", "afternoon", "evening"]
+    assert [p["status"] for p in periods] == ["available"] * 3
+    assert [s["hour"] for s in periods[0]["samples"]] == [8, 9, 10, 11]
+    assert periods[0]["samples"][0]["wind_kmh"] == 18
+    assert periods[1]["samples"][0]["condition"] == "sunny"
+    assert "SECRET" not in str(periods) and "IGNORE" not in str(periods)
+    assert all(s["temperature_c"] < 50 for p in periods for s in p["samples"])
+    later = w.periods_for_today(STATE, HOURLY, "Europe/Budapest", NOW + 8 * 3600)
+    assert later[0]["status"] == "elapsed" and later[0]["samples"] == []
+    assert [s["hour"] for s in later[1]["samples"]] == [16, 17]
+    fahrenheit = State(
+        "weather.example", "cloudy", {"temperature_unit": "°F", "wind_speed_unit": "mph"}
+    )
+    result = w.periods_for_today(fahrenheit, HOURLY, "Europe/Budapest", NOW)
+    assert result[0]["samples"][0]["temperature_c"] == -14.4
+    assert result[0]["samples"][0]["wind_kmh"] == 8
+
+
+def test_hourly_gaps_bad_values_duplicates_and_missing_do_not_become_clear_weather():
+    rows = deepcopy(HOURLY)
+    rows["weather.example"]["forecast"] = rows["weather.example"]["forecast"][:2]
+    rows["weather.example"]["forecast"][0].update(
+        condition="IGNORE", wind_speed=None, precipitation_probability=None
+    )
+    periods = w.periods_for_today(STATE, rows, "Europe/Budapest", NOW)
+    assert periods[0]["status"] == "partial"
+    assert periods[0]["samples"][0]["condition"] is None
+    assert periods[0]["samples"][0]["wind_kmh"] is None
+    assert periods[1]["status"] == "missing"
+    rows["weather.example"]["forecast"].append(rows["weather.example"]["forecast"][0])
+    assert len(w.periods_for_today(STATE, rows, "Europe/Budapest", NOW)[0]["samples"]) == 1
+    for row in (
+        {"datetime": "bad"},
+        {"datetime": "2026-11-11T08:00:00", "temperature": 10},
+        {"datetime": "2026-11-11T08:00:00Z", "temperature": float("nan")},
+    ):
+        assert (
+            w.periods_for_today(
+                STATE, {"weather.example": {"forecast": [row]}}, "Europe/Budapest", NOW
+            )[0]["status"]
+            == "missing"
+        )
+    assert all(
+        p["status"] == "missing" for p in w.periods_for_today(STATE, {}, "Europe/Budapest", NOW)
+    )
 
 
 def test_daily_forecast_is_today_in_ha_timezone_with_explicit_units_and_missing_values():
@@ -99,8 +167,7 @@ async def setup_provider(hass, options=None):
     hass.states.async_set(STATE.entity_id, STATE.state, dict(STATE.attributes))
 
     async def forecast(call):
-        assert call.data["type"] == "daily"
-        return deepcopy(FORECAST)
+        return deepcopy(FORECAST if call.data["type"] == "daily" else HOURLY)
 
     hass.services.async_register(
         "weather", "get_forecasts", forecast, supports_response=SupportsResponse.ONLY
@@ -140,6 +207,9 @@ async def test_native_ai_guard_cache_persistence_expiry_and_failed_output(hass):
                 and ai.call_args.kwargs["attachments"] is None
             )
             assert owner.weather_advice.data["valid_until"] == NOW + w.MAX_AGE
+            assert owner.weather_advice.data["periods"][1]["samples"][0]["condition"] == "sunny"
+            assert owner.weather_advice.data["hourly_status"] == "available"
+            assert "remaining_hourly_periods" in ai.call_args.kwargs["instructions"]
         assert not owner.weather_advice.current(NOW + w.MAX_AGE)
         assert not owner.weather_advice.current(NOW + 86400)
         await owner.weather_advice.load()
@@ -214,5 +284,37 @@ async def test_native_service_requires_admin_and_restart_does_not_publish_interr
             owner.weather_advice.data["status"] == "failed"
             and owner.weather_advice.data["text"] is None
         )
+    finally:
+        await owner.async_close()
+
+
+async def test_failed_hourly_collection_keeps_daily_tip_but_no_invented_periods(hass):
+    await setup_provider(hass)
+
+    async def forecast(call):
+        if call.data["type"] == "hourly":
+            raise RuntimeError("provider failure SECRET")
+        return deepcopy(FORECAST)
+
+    hass.services.async_register(
+        "weather", "get_forecasts", forecast, supports_response=SupportsResponse.ONLY
+    )
+    owner = await running_coordinator(hass)
+    try:
+        with (
+            patch.object(w.time, "time", return_value=NOW),
+            patch.object(
+                w.ai_task,
+                "async_generate_data",
+                AsyncMock(return_value=SimpleNamespace(data={"text": TEXT})),
+            ),
+        ):
+            result = await owner.weather_advice.generate(
+                "weather.example", "ai_task.example", Context()
+            )
+            assert result["status"] == "ready"
+            assert owner.weather_advice.data["hourly_status"] == "unavailable"
+            assert all(p["status"] == "missing" for p in owner.weather_advice.data["periods"])
+            assert "SECRET" not in str(owner.weather_advice.data)
     finally:
         await owner.async_close()

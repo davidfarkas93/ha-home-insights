@@ -182,3 +182,11 @@ is independent of retrospective incident/energy/heating/NAS report keys and the
 private journal. The administrator generation service exposes no generic tool.
 The frontend renders only a plain paragraph and rechecks source/day/expiry. Native
 HA time/start triggers own refresh; text cache age and display expiry are separate.
+
+
+v0.10 adds optional bounded remaining-hour projections to the same weather result.
+Native hourly forecasts are grouped by HA local day/period before reaching AI.
+The frontend composes detail text from those projected facts and reuses the shared
+sheet; opening it never generates content. Unsupported/failed hourly collection,
+elapsed periods and incomplete samples stay explicit without invalidating a valid
+daily tip. No new journal schema, credential, scheduler or tool privilege is added.
