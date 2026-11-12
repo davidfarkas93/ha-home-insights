@@ -116,3 +116,54 @@ def test_generic_alert_is_not_clean_and_sync_is_not_called_check():
         {SOURCE: [notification(start + 100, "Parity-Sync started")]}, [SOURCE], start, end
     )
     assert not sync["attention"] and "különbözik" in nas_events.chronology_statement(sync)
+
+
+def test_completion_zero_errors_and_backup_recurrence_survive_projection():
+    start, end = daily_window(DAY, "Europe/Budapest")
+    rows = [
+        notification(start + 100, "Parity disk in error state", "error", importance="ALERT"),
+        notification(start + 200, "Parity-Sync started", "start"),
+        notification(start + 300, "Parity-Sync finished (0 errors)", "finish"),
+    ]
+    timeline = nas_events.collect_events({SOURCE: rows}, [SOURCE], start, end)
+    assert timeline["events"][-1]["code"] == "parity_sync_completed"
+    assert timeline["events"][-1]["reported_errors"] == 0
+    assert "nulla jelzett hibával befejeződött" in nas_events.chronology_statement(timeline)
+    assert "helyreállt" not in nas_events.chronology_statement(timeline)
+    rows[-1] = notification(start + 300, "Parity-Sync finished (4 errors)", "finish")
+    bad = nas_events.collect_events({SOURCE: rows}, [SOURCE], start, end)
+    assert bad["events"][-1]["attention"]
+    assert "nem nulla" in nas_events.chronology_statement(bad)
+    backup = nas_events.collect_events(
+        {SOURCE: [notification(start + 100, "[AppdataBackup] Error!", importance="ALERT")]},
+        [SOURCE],
+        start,
+        end,
+    )
+    assert "Appdata Backup" in nas_events.chronology_statement(backup)
+    assert "ismét" in nas_events.chronology_statement(backup, backup)
+
+
+def test_completion_from_another_nas_does_not_close_this_disk_alert():
+    start, end = daily_window(DAY, "Europe/Budapest")
+    timeline = nas_events.collect_events(
+        {
+            SOURCE: [
+                notification(start + 100, "Parity disk in error state", importance="ALERT"),
+                notification(start + 200, "Parity-Sync started", "start"),
+            ]
+        },
+        [SOURCE],
+        start,
+        end,
+    )
+    timeline["events"].append(
+        {
+            **timeline["events"][-1],
+            "source": "event.other",
+            "code": "parity_sync_completed",
+            "at": timeline["end"],
+            "reported_errors": 0,
+        }
+    )
+    assert "még nem igazolt" in nas_events.chronology_statement(timeline)

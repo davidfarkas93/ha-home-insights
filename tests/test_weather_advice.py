@@ -16,7 +16,7 @@ from custom_components.home_insights import weather_advice as w
 from .test_runtime import running_coordinator
 
 NOW = datetime.fromisoformat("2026-11-11T08:00:00+01:00").timestamp()
-TEXT = "Ma rétegesen öltözz: meleg felső és kabát jól jöhet. Esőkabátot is vigyél."
+TEXT = "Öltözz rétegesen: meleg felső és kabát jól jöhet. Esőkabátot vagy esernyőt is vigyél."
 STATE = State(
     "weather.example",
     "cloudy",
@@ -338,3 +338,16 @@ def test_persisted_tip_with_unsupported_timing_is_invalidated_before_cache_reuse
         "valid_until": NOW + 3600,
     }
     assert not advice.current(NOW)
+
+
+def test_tip_options_are_clothing_only_and_do_not_exaggerate_light_wind_or_rain():
+    facts = w.facts_for_today(STATE, FORECAST, "Europe/Budapest", NOW)
+    facts["remaining_hourly_periods"] = w.periods_for_today(STATE, HOURLY, "Europe/Budapest", NOW)
+    options = w.tip_options(facts)
+    assert options and all(
+        len(t) <= 200 and "szél" not in t.lower() and "biztos" not in t for t in options
+    )
+    for text in options:
+        assert w.validate_text({"text": text}, facts) == text
+    with pytest.raises(ValueError):
+        w.validate_text({"text": "Az eső biztosra vehető, és a szél is fújni fog."}, facts)

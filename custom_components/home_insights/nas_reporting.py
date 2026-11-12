@@ -132,15 +132,28 @@ def evidence_bundle(facts):
         )
     timeline = facts.get("notifications")
     if timeline and timeline["attention"]:
+        chronology = nas_events.chronology_statement(timeline)
+        backup = any(e["code"] == "backup_error" for e in timeline["events"])
+        if backup and "Appdata Backup" not in chronology:
+            chronology += " Az Appdata Backup hibát is jelzett."
+        backup_check = backup and (
+            not any(e["code"] == "parity_disk_error" for e in timeline["events"])
+            or any(
+                e["code"] == "parity_sync_completed" and e.get("reported_errors") == 0
+                for e in timeline["events"]
+            )
+        )
         add(
             "notifications",
             "NAS-események",
             timeline["sources"][0],
-            nas_events.chronology_statement(timeline),
+            chronology,
             timeline,
             True,
             (
-                "NAS-események: nézd át az időrendi lemez- és paritásjelzéseket; "
+                "Appdata Backup: nézd át a sikertelen futás naplóját és az utolsó igazolt mentést."
+                if backup_check
+                else "NAS-események: nézd át az időrendi lemez- és paritásjelzéseket; "
                 "a jelzés eltűnése nem igazol javítást."
             ),
         )
@@ -181,7 +194,16 @@ def evidence_bundle(facts):
             {"unobserved_seconds": facts["unobserved_seconds"]},
             important=not priority,
         )
+    headline = next((e["statement"] for e in evidence if e["ref"] == "notifications"), None)
+    if headline:
+        priority = {"notifications"}
+    else:
+        headline = next(
+            (e["statement"] for e in evidence if e["ref"] in priority),
+            "A NAS megfigyelt állapotairól nincs elegendő adat.",
+        )
     bundle = {
+        "headline": headline,
         "scope": "nas_health",
         "day": facts["day"],
         "timezone": facts["timezone"],
@@ -198,7 +220,10 @@ def evidence_bundle(facts):
         ]
     follow = facts.get("since_midnight")
     if follow and follow["sources"]:
-        bundle["since_midnight"] = {**follow, "summary": nas_events.chronology_statement(follow)}
+        bundle["since_midnight"] = {
+            **follow,
+            "summary": nas_events.chronology_statement(follow, timeline),
+        }
     return bundle
 
 

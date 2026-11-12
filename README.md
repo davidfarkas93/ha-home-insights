@@ -483,3 +483,47 @@ In v0.10.1 the compact tip rejects time-of-day predictions, unqualified rain
 claims and shopping language. Persisted tips are validated before reuse, so an
 older unsupported timing claim cannot survive as a cached current result.
 Hourly detail remains composed from measured forecast points.
+
+
+## Focused daily interpretation (v0.11)
+
+Each completed report now stores a separate, HA-grounded `narrative.headline`.
+The hero can show the essential finding without truncating the first sentence of
+its detailed interpretation. The model still selects verified measured statements;
+the focus and its supporting source are retained separately from the model's body
+citations. No new tool, credential or device permission is exposed to AI.
+
+NAS notifications retain sync/check completion, cancellation/failure and explicit
+reported error counts. A zero-error completion states the observed result without
+certifying a repaired disk or full storage health. Appdata Backup errors are named;
+a recurrence since midnight is qualified against the previous day's observations.
+An unrelated NAS's completion cannot close a disk alert from another source.
+
+Heating reconnect handling reconciles explicit non-restored temperature points that
+arrive up to two seconds before the bus-on event. Points from before a disconnect
+or Recorder run cannot be reused as fresh recovery data. Original recording times,
+unknown periods and rapid-restart safeguards remain intact.
+
+Attention evidence is grouped by source/category before applying the eight-source
+budget. Lasting and significant observations rank ahead of brief cleared signals;
+snoozing remains a display action, never physical repair. Group observation counts
+are not physical fault counts and overlapping durations are never summed. Observed
+clearance remains distinct from notification removal. Source history and raw facts
+remain available in the private journal.
+
+Energy combines low solar yield with import context and treats <=0.1 kWh EV counter
+growth as small recorded energy, not proof of a charging session. Optional profile
+`solar_name` clarifies the measurement definition. Optional `solar_forecast` fields
+are `entity`, `snapshot_time` (default 06:00 local) and `maximum_age_hours` (default 6).
+Recorder selects the last same-day, non-restored numeric energy value at or before
+that fixed cutoff. Later revisions, yesterday's held values, ambiguous timestamps
+and unknown units cannot fill the snapshot. Forecast values are independent context:
+they do not silently weather-normalize the inverter's historical deviation or claim
+an exact percentage performance comparison across unverified measurement definitions.
+All mappings remain runtime profile configuration.
+
+Clothing advice now uses a native schema enumerating a few natural, forecast-grounded
+clothing suggestions. The AI cannot append a weather prediction or certainty claim.
+Rain gear requires meaningful forecast probability/precipitation; wind gear is only
+highlighted from 25 km/h. Persisted output is checked against its measured input
+before reuse. The separate hourly weather detail remains deterministic and read-only.

@@ -9,7 +9,14 @@ from zoneinfo import ZoneInfo
 
 import probatio as vol
 
-from . import energy_reporting, heating_reporting, nas_reporting, report_diagnostics, report_store
+from . import (
+    energy_reporting,
+    heating_reporting,
+    nas_reporting,
+    report_diagnostics,
+    report_focus,
+    report_store,
+)
 from .models import canonical, previous_day
 
 TIMEOUT = 120
@@ -49,7 +56,8 @@ def evidence_bundle(facts):
     if facts.get("scope") == "energy_statistics":
         return energy_reporting.evidence_bundle(facts)
     evidence = []
-    for item in facts.get("episodes", [])[:8]:
+    grouped = report_focus.group_sources(facts.get("episodes", []))
+    for item in grouped[:8]:
         evidence.append(
             {
                 "ref": f"episode_{len(evidence) + 1}",
@@ -73,6 +81,7 @@ def evidence_bundle(facts):
                 "name": clean_text(item.get("name"), 120),
                 "message": clean_text(item.get("message")),
                 "user_handling": item.get("handling_at_period_end", {}),
+                "group": item["group"],
             }
         )
     for item in facts.get("availability", {}).get("details", [])[:5]:
@@ -117,6 +126,11 @@ def evidence_bundle(facts):
         for n in facts.get("handling_events", [])[:10]
     ]
     return {
+        "headline": report_focus.headline(evidence),
+        "headline_evidence_refs": [evidence[0]["ref"]]
+        if evidence and evidence[0].get("group")
+        else [],
+        "source_group_count": len(grouped),
         "permitted_checks": [
             {
                 "ref": e["ref"],
@@ -131,6 +145,7 @@ def evidence_bundle(facts):
                 ),
             }
             for e in evidence
+            if not e.get("group", {}).get("observed_clearance")
         ],
         "day": facts["day"],
         "timezone": facts["timezone"],
@@ -149,7 +164,7 @@ def evidence_bundle(facts):
         "user_notes": notes,
         "truncated": bool(
             facts.get("episodes_truncated")
-            or len(facts.get("episodes", [])) > 8
+            or len(grouped) > 8
             or facts.get("handling_events_truncated")
             or len(rules) > 20
         ),
@@ -167,7 +182,12 @@ def instructions(bundle):
     return """
 Írj rövid magyar reggeli visszatekintést kizárólag az előző helyi naptári nap alábbi HA-
 tényeiből.
-A summary egyetlen rövid, tárgyilagos mondat a legfontosabb HA-jelzésről.
+A summary egy vagy két rövid, tárgyilagos mondat a legfontosabb HA-jelzésről.
+A források már csoportosítva és jelentőség szerint rendezve érkeznek. A group adatai
+alapján mondd el, fennállt-e a jelzés nap végén vagy megfigyelten rendeződött-e.
+Lezárt, rendeződött jelzéshez ne adj rutinszerű ellenőrzési feladatot.
+A rövid felügyeleti jelzés nem igazol pontos üzemszünetet; a többszöri initial
+észlelés nem bizonyít többszöri fizikai hibát.
 Tegező magyar szöveget írj, például: "Nézd meg...", "Ellenőrizd...".
 A HA-jelzést nevezd meg. Fizikai hibát csak független mérés igazolhat.
 Használj forráshoz kötött megfogalmazást: "jelzése aktív volt", "eltérést jelzett".
@@ -273,7 +293,12 @@ def validate_narrative(value, bundle):
         raise ValueError("Use the household's informal Hungarian voice")
     if bundle["data_quality"] != "complete":
         result["summary"] = "Az előző nap csak részben volt megfigyelve. " + result["summary"]
-    return {**result, "evidence_refs": list(dict.fromkeys(refs))}
+    return {
+        **result,
+        "headline": bundle.get("headline") or result["summary"],
+        "headline_evidence_refs": bundle.get("headline_evidence_refs", []),
+        "evidence_refs": list(dict.fromkeys(refs)),
+    }
 
 
 def readonly_provider(entity):
@@ -437,7 +462,10 @@ class ReportManager:
                 if skipped and bundle.get("scope") == "nas_health" and bundle.get("since_midnight"):
                     narrative["summary_since_midnight"] = bundle["since_midnight"]["summary"]
                 facts["ai_evidence"] = [
-                    e for e in bundle["evidence"] if e["ref"] in narrative["evidence_refs"]
+                    e
+                    for e in bundle["evidence"]
+                    if e["ref"]
+                    in {*narrative["evidence_refs"], *narrative.get("headline_evidence_refs", [])}
                 ]
                 await self.owner.execute(
                     report_store.save_report_facts, self.owner.journal, attempt["id"], facts

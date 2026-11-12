@@ -12,6 +12,7 @@ import probatio as vol
 from homeassistant.helpers.storage import Store
 from homeassistant.util.unit_conversion import EnergyConverter
 
+from . import energy_forecast
 from .models import daily_window, digest, iso
 
 METRICS = ("solar", "grid_import", "grid_export", "ev")
@@ -27,6 +28,12 @@ PROFILE_SCHEMA = vol.Schema(
         vol.Required("revision"): vol.All(str, vol.Length(min=1, max=80)),
         vol.Required("metrics"): {
             vol.Required(k): vol.Match(r"^sensor\.[a-z0-9_]+$") for k in METRICS
+        },
+        vol.Optional("solar_name"): vol.All(str, vol.Length(min=1, max=80)),
+        vol.Optional("solar_forecast"): {
+            vol.Required("entity"): vol.Match(r"^sensor\.[a-z0-9_]+$"),
+            vol.Optional("snapshot_time", default="06:00"): vol.Match(r"^([01]\d|2[0-3]):[0-5]\d$"),
+            vol.Optional("maximum_age_hours", default=6): vol.All(int, vol.Range(min=1, max=12)),
         },
         vol.Optional("baseline_days", default=14): vol.All(int, vol.Range(min=7, max=28)),
         vol.Optional("minimum_baseline_days", default=7): vol.All(int, vol.Range(min=7, max=28)),
@@ -179,7 +186,7 @@ def compute_facts(profile, profile_id, day, zone, statistics, metadata, historie
         values.append(
             {
                 "key": key,
-                "name": NAMES[key],
+                "name": profile.get("solar_name", NAMES[key]) if key == "solar" else NAMES[key],
                 "source": source,
                 "value": current if not status else None,
                 "recorded_delta_kwh": current,
@@ -214,7 +221,7 @@ def compute_facts(profile, profile_id, day, zone, statistics, metadata, historie
         else "no_anomaly_found"
     )
     coverage = min(v["statistics"]["hours"] for v in values) * 3600
-    return {
+    result = {
         "schema_version": 1,
         "scope": "energy_statistics",
         "profile_id": profile_id,
@@ -241,6 +248,13 @@ def compute_facts(profile, profile_id, day, zone, statistics, metadata, historie
         ],
     }
 
+    if profile.get("solar_forecast"):
+        config = profile["solar_forecast"]
+        result["solar_forecast"] = energy_forecast.snapshot(
+            histories.get(config["entity"], []), config, day, zone
+        )
+    return result
+
 
 def read_recorder(hass, start, end, history_start, sources):
     """Runs only on Recorder's own executor. No direct SQL or state writes."""
@@ -252,7 +266,7 @@ def read_recorder(hass, start, end, history_start, sources):
         hass, start, end, set(sources), "hour", {"energy": "kWh"}, {"sum", "state"}
     )
     histories = get_significant_states(
-        hass, history_start, end, sources, include_start_time_state=True, no_attributes=True
+        hass, history_start, end, sources, include_start_time_state=True, no_attributes=False
     )
     return data, metadata, histories
 
@@ -302,7 +316,8 @@ class EnergyReports:
             datetime.fromtimestamp(baseline_start - 3600, UTC),
             datetime.fromtimestamp(end, UTC),
             datetime.fromtimestamp(start, UTC),
-            list(profile["metrics"].values()),
+            list(profile["metrics"].values())
+            + ([profile["solar_forecast"]["entity"]] if profile.get("solar_forecast") else []),
         )
         async with asyncio.timeout(60):
             data, metadata, histories = await get_instance(self.owner.hass).async_add_executor_job(

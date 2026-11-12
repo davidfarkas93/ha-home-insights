@@ -166,3 +166,29 @@ def test_confirmed_rapid_findings_remain_primary_with_major_coverage_gaps():
         {"rapid_restarts", "coverage"} <= set(o["refs"])
         for o in reporting.evidence_bundle(f)["summary_options"]
     )
+
+
+@pytest.mark.parametrize(
+    "lead,restored,warm", [(0.000138, False, True), (3, False, False), (0.000138, True, False)]
+)
+def test_explicit_temperature_before_bus_on_is_reconciled_only_within_boundary(
+    lead, restored, warm
+):
+    p, h, r = thermal_fixture()
+    event(h, "connectivity", 700, "off")
+    a, _ = daily_window(DAY, "Europe/Budapest")
+    for key, value in (("flow", "33"), ("return", "31"), ("target", "35")):
+        source = p["temperatures"][key]
+        h[source].append(
+            State(
+                source,
+                value,
+                attributes={"unit_of_measurement": "°C", "restored": restored},
+                last_updated=datetime.fromtimestamp(a + 710 - lead, UTC),
+            )
+        )
+    event(h, "connectivity", 710, "on")
+    burn(h, 800, 300)
+    burn(h, 1400)
+    f = compute(p, h, r)
+    assert (f["cycles"]["samples"][-1]["thermal_context"] == "warm_operation") is warm

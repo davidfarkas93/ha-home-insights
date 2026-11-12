@@ -190,3 +190,18 @@ The frontend composes detail text from those projected facts and reuses the shar
 sheet; opening it never generates content. Unsupported/failed hourly collection,
 elapsed periods and incomplete samples stay explicit without invalidating a valid
 daily tip. No new journal schema, credential, scheduler or tool privilege is added.
+
+
+## v0.11 interpretation quality and separate focus
+
+Headline selection is separated from narrative ordering and persisted with source
+support. Private raw facts and old attempts are retained. Source grouping occurs
+before bounded attention projection, preserving observed clearance/initial/source
+identity and avoiding inferred physical outage sums. NAS lifecycle completion and
+backup errors remain explicit events. Thermal recovery reconciles only bounded,
+new valid observations inside the current run. Optional energy forecast snapshots
+are anchored to a configured local cutoff on the completed day and kept independent
+of unverified generation measurement bases. Clothing text is a schema-constrained
+selection rather than unvalidated weather prose. Luma owns the minimal hero and
+moves freshness/data-quality metadata into the existing detail sheet. Native HA
+scheduling and tool-free provider guards are unchanged.

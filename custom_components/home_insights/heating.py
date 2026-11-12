@@ -137,6 +137,8 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
     run_starts = {a for a, _ in trusted}
     values = {k: "unknown" for k in SOURCES}
     temperatures = {k: None for k in thermal}
+    recovery_points = {}
+    was_connected = False
     previous = "unknown"
     active = None
     cycles = []
@@ -178,16 +180,34 @@ def compute_facts(profile, profile_id, day, zone, histories, runs):
             values = {k: "unknown" for k in SOURCES}
             previous = "unknown"
             temperatures = {k: None for k in thermal}
+            recovery_points = {}
+            was_connected = False
             context.barriers.append(at)
         for key, changes in points.items():
             if at in changes:
                 values[key] = changes[at]
-        if values["connectivity"] != "on":
+        connected = values["connectivity"] == "on"
+        if was_connected and not connected:
+            recovery_points = {}
+        for key, changes in thermal.items():
+            if at in changes:
+                recovery_points[key] = (at, changes[at])
+        if not connected:
             temperatures = {k: None for k in thermal}
         else:
+            if not was_connected:
+                # Async entity updates can precede the bus-on update by microseconds.
+                # Reconcile only explicit non-restored points from this run, <=2s old.
+                temperatures = {
+                    k: recovery_points[k][1]
+                    if k in recovery_points and 0 <= at - recovery_points[k][0] <= 2
+                    else None
+                    for k in thermal
+                }
             for key, changes in thermal.items():
                 if at in changes:
                     temperatures[key] = changes[at]
+        was_connected = connected
         recording = any(a <= at < b for a, b in trusted)
         flame = values["flame"] if recording and values["connectivity"] == "on" else "unknown"
         if flame != previous:

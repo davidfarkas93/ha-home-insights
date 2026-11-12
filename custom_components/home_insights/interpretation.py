@@ -35,4 +35,10 @@ def validate_selection(value, bundle, partial_prefix):
     )
     if bundle["data_quality"] != "complete":
         result["summary"] = partial_prefix + result["summary"]
-    return {**result, "hypothesis": "", "suggested_check": check, "evidence_refs": selected["refs"]}
+    return {
+        **result,
+        "headline": bundle.get("headline", selected["text"]),
+        "hypothesis": "",
+        "suggested_check": check,
+        "evidence_refs": selected["refs"],
+    }

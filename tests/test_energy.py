@@ -277,7 +277,7 @@ def test_native_recorder_adapter_is_read_only_and_uses_energy_conversion(hass):
     inspect.signature(native_stats).bind(*stats.call_args.args, **stats.call_args.kwargs)
     inspect.signature(native_history).bind(*hist.call_args.args, **hist.call_args.kwargs)
     assert stats.call_args.args[5] == {"energy": "kWh"}
-    assert hist.call_args.kwargs == {"include_start_time_state": True, "no_attributes": True}
+    assert hist.call_args.kwargs == {"include_start_time_state": True, "no_attributes": False}
 
 
 async def test_energy_reports_are_persisted_cached_and_isolated_from_attention(hass):

@@ -19,6 +19,18 @@ def classify(subject, importance):
         return "array_health_pass", "Array állapotjelentés: rendben", False
     if "array turned good" in text:
         return "array_recovered", "Array: rendben visszajelzés", False
+    if re.search(r"appdata[\s_-]*backup", text) and ("error" in text or "fail" in text):
+        return "backup_error", "Appdata Backup hibajelzés", True
+    if "parity" in text and any(word in text for word in ("aborted", "cancelled", "failed")):
+        return "parity_operation_failed", "Parity-művelet megszakadt vagy hibát jelzett", True
+    if "parity-sync" in text and any(word in text for word in ("finished", "completed")):
+        return "parity_sync_completed", "Parity-szinkronizálás befejeződött", False
+    if (
+        "parity" in text
+        and "check" in text
+        and any(word in text for word in ("finished", "completed"))
+    ):
+        return "parity_check_completed", "Parity-ellenőrzés befejeződött", False
     if "parity-sync started" in text or "parity-sync in progress" in text:
         return "parity_sync", "Parity-szinkronizálás", False
     if "parity" in text and "check" in text and "start" in text:
@@ -68,6 +80,9 @@ def collect_events(histories, sources, start, end):
                 r"https?://\S+", "[hivatkozás elhagyva]", str(attrs.get("subject", ""))
             )[:500]
             code, label, alert = classify(subject, importance)
+            match = re.search(r"\b(\d{1,9})\s+errors?\b", subject, re.I)
+            errors = int(match[1]) if match and code.endswith("_completed") else None
+            alert = alert or (errors is not None and errors > 0)
             events.append(
                 {
                     "source": source,
@@ -75,6 +90,7 @@ def collect_events(histories, sources, start, end):
                     "at": iso(at),
                     "observed_at": iso(observed),
                     "code": code,
+                    "reported_errors": errors,
                     "label": label,
                     "subject": subject,
                     "importance": importance,
@@ -102,30 +118,77 @@ def collect_events(histories, sources, start, end):
     }
 
 
-def chronology_statement(timeline):
+def chronology_statement(timeline, previous=None):
     events = timeline["events"]
     errors = [e for e in events if e["code"] == "parity_disk_error"]
     if errors:
-        later = [e for e in events if e["at"] > errors[-1]["at"]]
+        last = errors[-1]
+        later = [e for e in events if e["at"] > last["at"] and e["source"] == last["source"]]
+        finished = [e for e in later if e["code"] == "parity_sync_completed"]
+        failed = [e for e in later if e["code"] == "parity_operation_failed"]
+        if failed and (not finished or failed[-1]["at"] > finished[-1]["at"]):
+            return "Parity-lemez hibajelzése után a parity-művelet megszakadást vagy hibát jelzett."
+        if finished:
+            count = finished[-1].get("reported_errors")
+            if count == 0:
+                return (
+                    "Parity-lemez hibajelzése után a szinkronizálás nulla jelzett "
+                    "hibával befejeződött."
+                )
+            if count is not None:
+                return (
+                    "Parity-lemez hibajelzése után a szinkronizálás befejeződött, de "
+                    "nem nulla hibaszámot jelentett."
+                )
+            return (
+                "Parity-lemez hibajelzése után a szinkronizálás befejeződéséről "
+                "értesítés érkezett; hibaszám nem áll rendelkezésre."
+            )
         if any(e["code"] == "parity_sync" for e in later):
             return (
-                "Parity-lemez hibajelzése érkezett, később parity-szinkronizálás indult; "
-                "a helyreállt paritásvédelem ebből még nem igazolt."
+                "Parity-lemez hibajelzése érkezett, később parity-szinkronizálás "
+                "indult; a helyreállt paritásvédelem ebből még nem igazolt."
             )
         return (
             "Parity-lemez hibajelzése érkezett; a későbbi elérhetőség "
             "önmagában nem igazolja a helyreállást."
         )
+    backups = [e for e in events if e["code"] == "backup_error"]
+    if backups:
+        repeated = any(
+            e["code"] == "backup_error" and e["source"] == backups[-1]["source"]
+            for e in (previous or {}).get("events", [])
+        )
+        return (
+            "Az Appdata Backup ismét hibát jelzett; érdemes átnézni a mentési naplót."
+            if repeated
+            else "Az Appdata Backup hibát jelzett; a mentési naplót érdemes átnézni."
+        )
+    completed = [
+        e for e in events if e["code"] in ("parity_sync_completed", "parity_check_completed")
+    ]
+    if completed:
+        if completed[-1].get("reported_errors") is None:
+            return "Parity-művelet befejeződéséről értesítés érkezett; a hibaszám ismeretlen."
+        label = (
+            "szinkronizálás" if completed[-1]["code"] == "parity_sync_completed" else "ellenőrzés"
+        )
+        result = (
+            "nulla jelzett hibával"
+            if completed[-1].get("reported_errors") == 0
+            else "nem nulla jelzett hibaszámmal"
+        )
+        return f"A parity-{label} {result} befejeződött; ez nem teljes lemez-egészségi vizsgálat."
     if timeline["attention"]:
         return (
-            "A NAS eseménynaplójában figyelmet kérő jelzés volt; "
-            "a részletekben visszanézhető az eseménysor."
+            "A NAS eseménynaplójában figyelmet kérő jelzés volt; a "
+            "részletekben visszanézhető az eseménysor."
         )
     if any(e["code"] == "parity_sync" for e in events):
         return "Parity-szinkronizálás indult; ez különbözik a parity-ellenőrzéstől."
     if any(e["code"] == "array_recovered" for e in events):
         return (
-            "Az array rendben állapotot jelzett; ebből önmagában "
-            "nem igazolható a teljes paritásvédelem."
+            "Az array rendben állapotot jelzett; ebből önmagában nem "
+            "igazolható a teljes paritásvédelem."
         )
     return "Nem találtam figyelmet kérő eseményt a megőrzött NAS-értesítésekben."

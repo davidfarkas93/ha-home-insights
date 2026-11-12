@@ -293,9 +293,10 @@ def test_output_schema_checks_are_bound_and_repeated_source_names_are_valid():
         "",
         *[c["text"] for c in bundle["permitted_checks"]],
     }
-    assert reporting.validate_narrative({**TEXT, "evidence_ids": "episode_2"}, bundle)[
+    assert len(bundle["evidence"]) == 1
+    assert reporting.validate_narrative({**TEXT, "evidence_ids": "episode_1"}, bundle)[
         "evidence_refs"
-    ] == ["episode_2"]
+    ] == ["episode_1"]
 
 
 async def test_service_and_private_report_ws_require_admin(hass):

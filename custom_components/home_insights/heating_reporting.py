@@ -167,7 +167,23 @@ def evidence_bundle(facts):
             else None,
             important=facts["data_quality"] != "minor_gaps",
         )
+    primary = next((e["statement"] for e in evidence if e["ref"] == "rapid_restarts"), None)
+    if not primary:
+        primary = next(
+            (
+                e["statement"]
+                for e in evidence
+                if e["ref"] in ("heating_burns", "burner_idle", "no_heating_cycles")
+            ),
+            "A fűtés működéséről nincs elegendő megfigyelés.",
+        )
+    if cycles.get("warm_short_heating") and not cycles["short_cycle_pattern"]:
+        primary = (
+            "A megfigyelt rövid égések egy része már meleg rendszerben "
+            "történt; gyors újraindulási sorozat nem alakult ki."
+        )
     return {
+        "headline": primary,
         "scope": "heating_cycles",
         "day": facts["day"],
         "timezone": facts["timezone"],

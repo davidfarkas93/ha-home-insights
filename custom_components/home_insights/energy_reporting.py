@@ -7,14 +7,14 @@ from .models import canonical
 def statement(metric):
     name = metric["name"].lower()
     subject = ("Az " if name.startswith("a") else "A ") + name
-    if metric["status"] != "complete":
+    if metric["status"] != "complete" or metric["value"] is None:
         return subject + " teljes napi összege nem igazolható."
     if metric["key"] == "ev":
-        return subject + (
-            " rögzített energiája nem nőtt."
-            if metric["value"] == 0
-            else " rögzített energiája nőtt a nap folyamán."
-        )
+        if metric["value"] == 0:
+            return subject + " rögzített energiája nem nőtt."
+        if metric["value"] <= 0.1:
+            return subject + " rögzített energianövekménye csekély volt."
+        return subject + " rögzített energiája nőtt a nap folyamán."
     if metric["baseline"]["status"] != "complete":
         return subject + " napi összege ismert, de nincs elég korábbi adat az összehasonlításhoz."
     if metric["deviation"]:
@@ -70,8 +70,46 @@ def evidence_bundle(facts):
         else:
             continue
         checks.append({"ref": key, "text": text})
+    metrics = {m["key"]: m for m in facts["metrics"]}
+    solar, imported = metrics["solar"], metrics["grid_import"]
+    headline = statement(solar) if solar["deviation"] else statement(imported)
+    if (
+        solar["deviation"]
+        and imported["status"] == "complete"
+        and imported["baseline"]["status"] == "complete"
+        and not imported["deviation"]
+    ):
+        headline = "A kevés napelemtermelés mellett a hálózati import nem volt szokatlanul magas."
+        evidence.append(
+            {
+                "ref": "energy_context",
+                "name": "Termelés és import együtt",
+                "source": solar["source"],
+                "category": "energy",
+                "statement": headline,
+            }
+        )
+        priority = {"energy_context"}
+        checks = []
+    forecast = facts.get("solar_forecast")
+    if forecast and forecast["status"] == "available":
+        value = str(forecast["value_kwh"]).replace(".", ",")
+        evidence.append(
+            {
+                "ref": "forecast",
+                "name": "Rögzített napelem-előrejelzés",
+                "source": forecast["source"],
+                "category": "energy",
+                "statement": (
+                    f"A reggeli napelem-előrejelzés {value} kWh-t jelzett; ez külön "
+                    "forrásból származó előrejelzés, nem a termelés oka."
+                ),
+                "snapshot": forecast,
+            }
+        )
     options = interpretation.summary_options(evidence, priority)
     return {
+        "headline": headline,
         "scope": "energy_statistics",
         "day": facts["day"],
         "timezone": facts["timezone"],
