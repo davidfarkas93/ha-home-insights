@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import SIGNAL_CONFIG_ENTRY_CHANGED, ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.const import EVENT_CALL_SERVICE, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry
@@ -29,6 +29,7 @@ from .heating import HeatingReports
 from .journal import Journal
 from .models import previous_day
 from .nas import NasReports
+from .notification_memory import NotificationMemory, acknowledge
 from .reporting import ReportManager
 from .weather_advice import WeatherAdvice
 
@@ -59,6 +60,7 @@ class Coordinator:
         self.worker: asyncio.Task | None = None
         self.journal: Journal | None = None
         self.attention = AttentionRuntime(self)
+        self.notification_memory = NotificationMemory(self)
         self.energy = EnergyReports(self)
         self.heating = HeatingReports(self)
         self.nas = NasReports(self)
@@ -112,8 +114,12 @@ class Coordinator:
         if self.closed or self.started:
             return
         self.started = True
+        self.notification_memory.settle_until = time.time() + 30
         self.removers.extend(
             [
+                self.hass.bus.async_listen(
+                    EVENT_CALL_SERVICE, self.notification_memory.service_requested
+                ),
                 async_dispatcher_connect(
                     self.hass,
                     adapters.persistent_notification.SIGNAL_PERSISTENT_NOTIFICATIONS_UPDATED,
@@ -154,6 +160,8 @@ class Coordinator:
 
     @callback
     def _notifications_changed(self, *_args) -> None:
+        if len(_args) == 2:
+            self.notification_memory.removed(*_args)
         try:
             self.enqueue("batch", ("notifications", adapters.notifications(self.hass)))
         except Exception:
@@ -238,6 +246,9 @@ class Coordinator:
         if adapter == "repairs":
             rows = await adapters.translate_repairs(self.hass, rows)
         await self.execute(self.journal.batch, adapter, rows, now)
+        if adapter == "notifications":
+            await self.notification_memory.reconcile()
+            rows = adapters.notifications(self.hass)
         self.attention.native(adapter, rows)
 
     async def _run(self) -> None:
@@ -264,6 +275,8 @@ class Coordinator:
                 if kind == "batch":
                     await self._apply_batch(*payload, at)
                     self.attention.queue()
+                elif kind == "notification_ack":
+                    await self.execute(acknowledge, self.journal, *payload, at)
                 elif kind == "failure":
                     await self.execute(self.journal.source_failure, *payload, at)
                     self.attention.native(payload[0], [], error=True)

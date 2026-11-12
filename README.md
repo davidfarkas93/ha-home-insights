@@ -10,6 +10,39 @@ its source entities without a browser and journals stable policy episodes separa
 from native source evidence. Installing alone changes no dashboard or automation.
 It does not automatically configure an AI provider or replace a daily-report automation.
 
+## Restart-safe handling (v0.12)
+
+When observation resumes, existing incident episodes are retained while a startup
+clearance candidate is checked. An inactive state must remain observed for 30 seconds
+before closing that carried episode. Missing/restored/pending data is uncertain and
+does not certify clearance. A return to active keeps the episode, recurrence key and
+saved snooze. New incidents and escalation are not delayed; a later sustained clear
+and genuine recurrence still create a new episode.
+
+Some integrations recreate unchanged persistent notifications at startup. An optional
+policy adapter binding can remember an explicit user dismissal for a known condition:
+
+```json
+{"adapters":{"notifications":true,"notification_acknowledgements":[
+  {"notification_id":"robot-condition","entity":"sensor.robot_check","state":"rain"}
+]}}
+```
+
+Only configured IDs with that currently observed condition are eligible. Native
+`persistent_notification.dismiss` / `dismiss_all` calls by an authenticated user
+are remembered after the actual matching removal; producer removals, automation
+contexts and failed dismissals are not. Both HA and Luma's existing dismiss controls
+use those native services. The backend removes a recreated notice only when ID,
+title, message and observed condition still match. Unknown/restored context cannot
+suppress it. Changed content or an observed condition change resets the memory;
+startup context is allowed 30 seconds to settle before resetting a saved dismissal.
+Other notifications are unaffected. This is reversible notification delivery
+handling, never device control, source repair, AI tool access or configuration writing.
+
+Acknowledgements and redelivery suppression are audited in the existing journal;
+raw delivery evidence remains. No external tokens or third-party integration patches
+are required. The additive journal table is ignored by older releases on downgrade.
+
 ## Morning reports (v0.4)
 
 The `home_insights.generate_report` action takes `policy_id`, `ai_task_entity`,

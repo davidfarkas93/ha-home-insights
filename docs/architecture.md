@@ -1,5 +1,28 @@
 # Architecture and migration
 
+## Restart-safe notification handling
+
+The canonical journal holds startup-clearance guards for incident episodes that
+were already open when observation resumed. A 30-second observed inactive candidate
+is required once per carried episode; missing/restored data resets that candidate.
+Returning active retains identity and handling metadata. The read projection carries
+the journal's explicit startup uncertainty rather than presenting a raw cached clear.
+The pure v1 policy evaluator/oracle is unchanged.
+
+An optional adapter notification_acknowledgements binding connects one notification
+ID to an observable sensor/binary-sensor condition. A synchronous native call-service
+listener captures only direct authenticated-user dismiss intent. The actual matching
+REMOVED callback confirms it; an unfulfilled intent expires next event-loop turn.
+Only then does the dedicated executor persist a content hash, condition and actor.
+Native producer removals and automated contexts do not create acknowledgements.
+
+On redelivery the executor checks saved identity and context, then the event loop
+rechecks current content and source immediately before native async_dismiss. Changed
+messages, changed bindings or settled observed condition changes reset the memory;
+uncertain context leaves the notice visible. Integration startup has a 30-second
+context settlement period. Only delivery metadata is written; source control and AI
+capabilities are unchanged. The additive table and audits use the existing journal.
+
 Attention summaries use the AI's validated source selection and render lifecycle
 statements from the recorded source groups. The latest observed clearance is
 distinct from continuous coverage of all earlier episodes. A retained event-channel

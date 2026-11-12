@@ -1,5 +1,6 @@
 """Policy import persistence, canonical episodes, permissions and native HA changes."""
 
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -86,6 +87,44 @@ async def test_invalid_import_does_not_replace_valid_policy(hass):
         assert coordinator.attention.policies["example"] == POLICY
     finally:
         await coordinator.async_close()
+
+
+async def test_restart_read_preserves_snooze_during_cached_clearance(hass):
+    hass.states.async_set("sensor.temperature", "44")
+    owner = await running_coordinator(hass)
+    admin = SimpleNamespace(id="user", name="User", is_admin=True)
+    await owner.attention.set_policy("example", POLICY)
+    first = await owner.attention.read("example", user=admin)
+    row = next(r for r in first["rows"] if r["rule"] == "warm")
+    until = time.time() + 3600
+    await owner.attention.handle(
+        {
+            "policy_id": "example",
+            "request_id": "snooze",
+            "operation": "snooze",
+            "until": until,
+            "targets": [
+                {"row_id": row["id"], "episode_id": row["episodeId"], "expected_revision": 0}
+            ],
+        },
+        admin,
+    )
+    entry = owner.entry
+    await owner.async_close()
+    hass.states.async_set("sensor.temperature", "40")
+    owner = await running_coordinator(hass, entry=entry)
+    try:
+        current = await owner.attention.read("example", user=admin)
+        pending = next(r for r in current["rows"] if r["rule"] == "warm")
+        assert pending["status"] == "loading" and pending["episodeId"] == row["episodeId"]
+        hass.states.async_set("sensor.temperature", "44")
+        await hass.async_block_till_done()
+        current = await owner.attention.read("example", user=admin)
+        active = next(r for r in current["rows"] if r["rule"] == "warm")
+        assert active["episodeId"] == row["episodeId"] and active["key"] == row["key"]
+        assert active["snoozedUntil"] == until
+    finally:
+        await owner.async_close()
 
 
 async def test_metadata_is_audited_authorized_and_never_calls_source_services(hass):

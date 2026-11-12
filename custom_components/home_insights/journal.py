@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from .handling import setup_storage
 from .models import Observation, canonical, daily_window, digest, iso
+from .notification_memory import setup_notification_memory
 from .report_store import setup_reports
 
 SOURCE_REMOVALS = {
@@ -60,6 +61,8 @@ class Journal:
         """)
         setup_storage(self.db)
         setup_reports(self.db, now)
+        setup_notification_memory(self.db)
+        self.attention_restart_guards = {}
         self.run_id = str(uuid4())
         self.policy_hash = digest(policy)
         self.baselines: set[str] = set()

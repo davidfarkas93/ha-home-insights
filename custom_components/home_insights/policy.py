@@ -42,6 +42,21 @@ def validate_policy(value):
         items = value.get("adapters", {}).get(key, [])
         if not isinstance(items, list) or any(not isinstance(v, str) for v in items):
             raise ValueError("Invalid adapter sources")
+    acknowledgements = value.get("adapters", {}).get("notification_acknowledgements", [])
+    if not isinstance(acknowledgements, list) or len(acknowledgements) > 64:
+        raise ValueError("Invalid notification acknowledgements")
+    notice_ids = set()
+    for binding in acknowledgements:
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"notification_id", "entity", "state"}
+            or any(not isinstance(v, str) or not v or len(v) > 255 for v in binding.values())
+            or not re.fullmatch(r"(?:sensor|binary_sensor)\.[a-z0-9_]+", binding.get("entity", ""))
+            or binding.get("state") in ("unknown", "unavailable")
+            or binding.get("notification_id") in notice_ids
+        ):
+            raise ValueError("Invalid notification acknowledgement binding")
+        notice_ids.add(binding["notification_id"])
     for rule in value["rules"]:
         if not isinstance(rule, dict) or set(rule) - RULE_FIELDS:
             raise ValueError("Unsupported rule fields")

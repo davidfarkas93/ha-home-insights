@@ -8,6 +8,40 @@ from .handling import context_observed, record_quality
 from .models import Observation, canonical, digest
 
 
+def startup_rows(journal, policy, rows, now, resumed):
+    if resumed:
+        journal.attention_restart_guards[policy] = {
+            r["id"]: None
+            for r in journal.db.execute(
+                "SELECT id FROM attention_rows WHERE policy=? AND episode IS NOT NULL "
+                "AND json_extract(body,'$.kind')='incident'",
+                (policy,),
+            )
+        }
+    guards = journal.attention_restart_guards.get(policy, {})
+    result = []
+    for row in rows:
+        identifier = row["id"]
+        if identifier in guards:
+            status = row["status"]
+            if status == "inactive":
+                since = guards[identifier]
+                if since is None:
+                    guards[identifier] = now
+                if since is None or now - since < 30:
+                    row = {**row, "status": "loading", "reason": "startup_clearance_pending"}
+                else:
+                    guards.pop(identifier)
+            elif status in ("unavailable", "loading", "pending") or row["reason"] == "restored":
+                guards[identifier] = None
+                if status == "pending" or row["reason"] == "restored":
+                    row = {**row, "status": "loading", "reason": "startup_clearance_pending"}
+            else:
+                guards.pop(identifier)
+        result.append(row)
+    return result
+
+
 def record_attention(
     journal,
     policy_id,
@@ -22,6 +56,8 @@ def record_attention(
 ):
     db = journal.db
     policy_hash = digest(policy)
+    rows = startup_rows(journal, policy_id, rows, now, resumed)
+    complete = complete and not any(r["status"] in ("loading", "unavailable") for r in rows)
     with db:
         record_quality(db, policy_id, rows, now, complete)
         context_observed(journal, policy_id, household_snapshot, now)

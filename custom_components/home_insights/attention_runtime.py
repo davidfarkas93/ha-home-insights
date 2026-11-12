@@ -96,6 +96,13 @@ class AttentionRuntime:
         }
         if len(bindings) > 1:
             raise ValueError("Policies must use the same shared household evaluator")
+        notices = {}
+        for p in candidate.values():
+            for binding in p.get("adapters", {}).get("notification_acknowledgements", []):
+                identifier = binding["notification_id"]
+                if identifier in notices and notices[identifier] != binding:
+                    raise ValueError("Notification acknowledgement bindings conflict")
+                notices[identifier] = binding
         await self.store.async_save(candidate)
         self.policies = candidate
         self.resumed.discard(name)
@@ -152,6 +159,10 @@ class AttentionRuntime:
         dependencies = set()
         guards = set()
         for policy in self.policies.values():
+            dependencies.update(
+                b["entity"]
+                for b in policy.get("adapters", {}).get("notification_acknowledgements", [])
+            )
             if policy.get("acknowledgements_entity"):
                 dependencies.add(policy["acknowledgements_entity"])
             dependencies.update(policy.get("adapters", {}).get("events", []))
@@ -358,6 +369,7 @@ class AttentionRuntime:
         self.queue()
 
     async def evaluate(self, inputs):
+        await self.owner.notification_memory.reconcile(inputs["states"])
         for name, policy in self.policies.items():
             external = {**inputs["external"], "registry": inputs["registry"]}
             now = time.time() * 1000
@@ -443,6 +455,12 @@ class AttentionRuntime:
         persisted = {r["id"]: r for r in self.results[name]["rows"]}
         for row in rows:
             old = persisted.get(row["id"])
+            if (
+                old
+                and old["reason"] == "startup_clearance_pending"
+                and (row["status"] in ("inactive", "pending") or row["reason"] == "restored")
+            ):
+                row.update(status="loading", reason="startup_clearance_pending")
             if old and old["status"] == row["status"]:
                 row["key"] = old["key"]
                 if old.get("episodeId"):
