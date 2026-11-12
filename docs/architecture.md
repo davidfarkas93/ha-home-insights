@@ -1,5 +1,11 @@
 # Architecture and migration
 
+Attention summaries use the AI's validated source selection and render lifecycle
+statements from the recorded source groups. The latest observed clearance is
+distinct from continuous coverage of all earlier episodes. A retained event-channel
+record does not establish a continuously active condition. Neither free prose nor
+the maximum severity of an older channel message can override these facts.
+
 ## v0.2 policy authority
 
 Validated v1 policies now live in an integration-owned HA Store. The Python evaluator

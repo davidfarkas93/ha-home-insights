@@ -146,6 +146,7 @@ def evidence_bundle(facts):
             }
             for e in evidence
             if not e.get("group", {}).get("observed_clearance")
+            and not e.get("group", {}).get("latest_observed_clearance")
             and not e.get("group", {}).get("event_record_only")
         ],
         "day": facts["day"],
@@ -294,8 +295,15 @@ def validate_narrative(value, bundle):
         re.IGNORECASE,
     ):
         raise ValueError("Use the household's informal Hungarian voice")
+    # AI selects the relevant sources; condition lifecycle wording remains derived
+    # from recorded evidence, so prose cannot contradict the report focus.
+    if selected and all(e.get("group") for e in selected):
+        result["summary"] = " ".join(report_focus.headline([e]) for e in selected)
     if bundle["data_quality"] != "complete":
-        result["summary"] = "Az előző nap csak részben volt megfigyelve. " + result["summary"]
+        # Apply the qualifier once, after selecting evidence-derived wording.
+        prefix = "Az előző nap csak részben volt megfigyelve. "
+        if not result["summary"].startswith(prefix):
+            result["summary"] = prefix + result["summary"]
     return {
         **result,
         "headline": bundle.get("headline") or result["summary"],

@@ -333,3 +333,12 @@ def test_monitoring_problem_is_explicit_observation_language_not_physical_diagno
         reporting.validate_narrative(
             {**TEXT, "summary": "A Kazán biztosan fizikailag meghibásodott."}, bundle
         )
+
+
+def test_ai_cannot_change_selected_source_lifecycle_in_persisted_summary():
+    bundle = reporting.evidence_bundle(facts())
+    result = reporting.validate_narrative(
+        {**TEXT, "summary": "A Kazán jelzése rendeződött."}, bundle
+    )
+    assert "nap végén is fennállt" in result["summary"]
+    assert "rendeződött" not in result["summary"]

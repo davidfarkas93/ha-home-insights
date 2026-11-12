@@ -82,3 +82,27 @@ def test_channel_completion_does_not_inherit_an_older_alert_severity():
     assert groups[1]["tone"] == "warning"
     assert groups[1]["group"]["event_record_only"]
     assert "fennállt" not in headline([groups[1]])
+
+
+def test_latest_clearance_does_not_certify_unobserved_earlier_intervals():
+    base = {"source": "sensor.disk", "name": "Disk", "category": "issues"}
+    groups = group_sources(
+        [
+            {
+                **base,
+                "first_observed_at": "2026-11-11T01:00:00Z",
+                "closed_at": "2026-11-11T02:00:00Z",
+                "close_reason": "no_longer_monitored",
+            },
+            {
+                **base,
+                "first_observed_at": "2026-11-11T18:00:00Z",
+                "closed_at": "2026-11-11T19:00:00Z",
+                "close_reason": "condition_cleared",
+            },
+        ]
+    )
+    assert not groups[0]["group"]["observed_clearance"]
+    assert groups[0]["group"]["latest_observed_clearance"]
+    assert "legutóbbi megfigyelt jelzés rendeződött" in headline(groups)
+    assert "nem követhető végig" in headline(groups)

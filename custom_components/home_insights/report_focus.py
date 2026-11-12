@@ -17,6 +17,9 @@ def group_sources(episodes):
         resolved = not open_items and all(
             e.get("close_reason") == "condition_cleared" for e in items
         )
+        latest_cleared = (
+            not open_items and representative.get("close_reason") == "condition_cleared"
+        )
         snoozed = bool(open_items) and all(
             e.get("handling_at_period_end", {}).get("snooze_override") for e in open_items
         )
@@ -49,6 +52,7 @@ def group_sources(episodes):
                     "observations": len(items),
                     "open_at_end": bool(open_items),
                     "observed_clearance": resolved,
+                    "latest_observed_clearance": latest_cleared,
                     "snoozed_at_end": snoozed,
                     "event_record_only": event_record,
                     "maximum_confirmed_active_seconds": maximum,
@@ -72,4 +76,9 @@ def headline(evidence):
         return f"{name}: a jelzés nap végén is fennállt."
     if group["observed_clearance"]:
         return f"{name}: a felügyeleti jelzés a megfigyelt időszakban rendeződött."
+    if group.get("latest_observed_clearance"):
+        return (
+            f"{name}: a legutóbbi megfigyelt jelzés rendeződött; "
+            "a korábbi szakaszok egy része nem követhető végig."
+        )
     return f"{name}: a megfigyelt jelzés részletei visszanézhetők; rendeződése nem igazolt."
