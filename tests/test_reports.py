@@ -289,10 +289,7 @@ def test_output_schema_checks_are_bound_and_repeated_source_names_are_valid():
         openapi_version="3.1.0",
     )
     assert schema["properties"]["hypothesis"]["enum"] == [""]
-    assert set(schema["properties"]["suggested_check"]["enum"]) == {
-        "",
-        *[c["text"] for c in bundle["permitted_checks"]],
-    }
+    assert schema["properties"]["suggested_check"]["enum"] == [""]
     assert len(bundle["evidence"]) == 1
     assert reporting.validate_narrative({**TEXT, "evidence_ids": "episode_1"}, bundle)[
         "evidence_refs"
@@ -342,3 +339,14 @@ def test_ai_cannot_change_selected_source_lifecycle_in_persisted_summary():
     )
     assert "nap végén is fennállt" in result["summary"]
     assert "rendeződött" not in result["summary"]
+
+
+def test_native_selection_derives_checks_only_from_selected_unresolved_sources():
+    bundle = reporting.evidence_bundle(facts())
+    result = reporting.validate_narrative({**TEXT, "suggested_check": ""}, bundle)
+    assert result["suggested_check"].startswith("Kazán:")
+    data = facts()
+    data["episodes"][0].update(closed_at="2026-11-09T20:00:00Z", close_reason="condition_cleared")
+    bundle = reporting.evidence_bundle(data)
+    result = reporting.validate_narrative({**TEXT, "suggested_check": ""}, bundle)
+    assert result["suggested_check"] == ""

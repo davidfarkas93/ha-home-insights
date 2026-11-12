@@ -33,9 +33,7 @@ def output_schema(bundle):
         {
             vol.Required("summary"): str,
             vol.Required("hypothesis"): vol.In([""]),
-            vol.Required("suggested_check"): vol.In(
-                [""] + [c["text"] for c in bundle["permitted_checks"]]
-            ),
+            vol.Required("suggested_check"): vol.In([""]),
             vol.Required("evidence_ids"): str,
         }
     )
@@ -198,7 +196,7 @@ Használj forráshoz kötött megfogalmazást: "jelzése aktív volt", "eltéré
 Ne egészítsd ki energiaellátási, teljesítménybeli vagy más általános hatás feltételezésével.
 Operatív jelzés mellett ne emeld ki a sikeres indulási értesítéseket és rutinfrissítéseket.
 A hypothesis legyen üres: a jelzésnapló önmagában nem tartalmaz okot igazoló mérést.
-A suggested_check pontosan egy permitted_checks.text legyen, vagy üres szöveg.
+A suggested_check legyen üres: a rendszer a kiválasztott forráshoz köti az ellenőrzést.
 Új mérést, szolgáltatást vagy tetszőleges javaslatot nem nevezhetsz meg.
 Csak a ténylegesen tárgyalt megfigyelések ref-jei kerüljenek az evidence_ids-be.
 Az evidence_ids mezőbe csak a ténylegesen használt, legfeljebb két evidence.ref kerüljön.
@@ -299,6 +297,9 @@ def validate_narrative(value, bundle):
     # from recorded evidence, so prose cannot contradict the report focus.
     if selected and all(e.get("group") for e in selected):
         result["summary"] = " ".join(report_focus.headline([e]) for e in selected)
+        result["suggested_check"] = next(
+            (c["text"] for c in bundle["permitted_checks"] if c["ref"] in refs), ""
+        )
     if bundle["data_quality"] != "complete":
         # Apply the qualifier once, after selecting evidence-derived wording.
         prefix = "Az előző nap csak részben volt megfigyelve. "

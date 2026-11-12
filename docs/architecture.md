@@ -5,6 +5,9 @@ statements from the recorded source groups. The latest observed clearance is
 distinct from continuous coverage of all earlier episodes. A retained event-channel
 record does not establish a continuously active condition. Neither free prose nor
 the maximum severity of an older channel message can override these facts.
+The native attention output schema leaves the check field empty; the backend
+derives any check from the selected unresolved source. This avoids coupling an
+otherwise valid source selection to a different source's suggested action.
 
 ## v0.2 policy authority
 
