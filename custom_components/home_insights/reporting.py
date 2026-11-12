@@ -146,6 +146,7 @@ def evidence_bundle(facts):
             }
             for e in evidence
             if not e.get("group", {}).get("observed_clearance")
+            and not e.get("group", {}).get("event_record_only")
         ],
         "day": facts["day"],
         "timezone": facts["timezone"],
@@ -188,6 +189,8 @@ alapján mondd el, fennállt-e a jelzés nap végén vagy megfigyelten rendeződ
 Lezárt, rendeződött jelzéshez ne adj rutinszerű ellenőrzési feladatot.
 A rövid felügyeleti jelzés nem igazol pontos üzemszünetet; a többszöri initial
 észlelés nem bizonyít többszöri fizikai hibát.
+Az event_record_only egy értesítési csatorna utolsó üzenete, nem fennálló
+hibafeltétel. A nyitott értesítés nem igazol aktív hibát, az időtartama nem üzemzavar.
 Tegező magyar szöveget írj, például: "Nézd meg...", "Ellenőrizd...".
 A HA-jelzést nevezd meg. Fizikai hibát csak független mérés igazolhat.
 Használj forráshoz kötött megfogalmazást: "jelzése aktív volt", "eltérést jelzett".

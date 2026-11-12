@@ -46,3 +46,39 @@ def test_snooze_is_not_source_repair_and_updates_do_not_displace_issues():
     groups = group_sources(rows)
     assert groups[0]["source"] == "sensor.issue"
     assert "fennállt" in headline(groups) and "szüneteltetted" in headline(groups)
+
+
+def test_channel_completion_does_not_inherit_an_older_alert_severity():
+    records = [
+        {
+            "source": "event.nas",
+            "name": "Old failure",
+            "category": "events",
+            "tone": "error",
+            "first_observed_at": "2026-11-11T01:00:00Z",
+            "closed_at": "2026-11-11T02:00:00Z",
+            "close_reason": "superseded",
+        },
+        {
+            "source": "event.nas",
+            "name": "Completed",
+            "category": "events",
+            "tone": "warning",
+            "first_observed_at": "2026-11-11T19:00:00Z",
+            "closed_at": None,
+        },
+        {
+            "source": "sensor.disk",
+            "name": "Disk",
+            "category": "issues",
+            "tone": "error",
+            "closed_at": "2026-11-11T20:00:00Z",
+            "close_reason": "condition_cleared",
+            "confirmed_active_seconds": 3600,
+        },
+    ]
+    groups = group_sources(records)
+    assert groups[0]["source"] == "sensor.disk"
+    assert groups[1]["tone"] == "warning"
+    assert groups[1]["group"]["event_record_only"]
+    assert "fennállt" not in headline([groups[1]])
