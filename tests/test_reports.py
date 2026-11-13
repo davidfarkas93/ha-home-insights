@@ -337,7 +337,7 @@ def test_ai_cannot_change_selected_source_lifecycle_in_persisted_summary():
     result = reporting.validate_narrative(
         {**TEXT, "summary": "A Kazán jelzése rendeződött."}, bundle
     )
-    assert "nap végén is fennállt" in result["summary"]
+    assert "nap végén is aktív volt" in result["summary"]
     assert "rendeződött" not in result["summary"]
 
 

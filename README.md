@@ -45,6 +45,37 @@ are required. The additive journal table is ignored by older releases on downgra
 
 ## Morning reports (v0.4)
 
+### Operational context and scoped findings (v0.13)
+
+Operational reports separate observation quality from recorded findings. An observed
+open signal can require review even with gaps; gaps never certify a clean full day.
+`no_action_needed` means recorded signals were handled/closed without a remaining
+source check, not that no signal ever occurred. With incomplete observation and no
+confirmed check, the result remains `insufficient_data`. No observation stays `not_run`.
+This new report state requires **Luma 0.59 or newer**; install the frontend first.
+
+Historical facts add `observation_scope` (observer downtime versus incomplete source
+states), `report_overview` (source-group lifecycle counts), and per-source `history`.
+Earlier observations never establish a physical fault's start or continuous duration.
+The detailed `narrative.observation_note` explains what the missing intervals limit;
+the compact headline retains the actual source finding rather than a technical prefix.
+Coverage percentages, gaps and raw canonical episodes remain unchanged.
+
+Explicit authenticated native notification dismissals are now audited even without
+an automatic-redelivery binding. This does **not** enable suppression for unbound
+notices. User dismissal, known unchanged redelivery, producer/channel removal,
+observed clearance, claimed repair and snooze are different facts. Only configured
+condition/content matches retain the existing v0.12 automatic suppression behavior.
+Reports use historical events before the local day boundary, never mutable present-day
+acknowledgement tables. Legacy remembered dismissals remain readable.
+
+Removed notification deliveries and no-longer-reported Repairs do not become generic
+unresolved physical faults. Expired/undone snoozes do not hide open signals. Selected
+sources retain the leading review finding; a data gap cannot be selected as a fault.
+The AI still receives bounded facts with no tools, device/configuration writes,
+firmware, shell or additional credentials. Full automation trace analysis is explicitly
+outside this operational observation scope.
+
 The `home_insights.generate_report` action takes `policy_id`, `ai_task_entity`,
 optional completed local `date` (yesterday by default), and `force` (default false).
 Call it from a native HA time-triggered automation or its existing script. Successful

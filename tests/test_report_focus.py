@@ -39,7 +39,8 @@ def test_snooze_is_not_source_repair_and_updates_do_not_displace_issues():
             "category": "issues",
             "tone": "warning",
             "closed_at": None,
-            "handling_at_period_end": {"snooze_override": True},
+            "handling_at_period_end": {"snooze_override": True, "snoozed_until": 200},
+            "period_end": 100,
         },
         {"source": "update.x", "category": "updates", "tone": "error", "closed_at": None},
     ]

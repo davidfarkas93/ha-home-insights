@@ -1,5 +1,22 @@
 # Architecture and migration
 
+## v0.13 operational report context
+
+Daily coverage remains conservative. Finding assessment is independent: positively
+observed open sources can warrant review despite missing intervals. A separate
+`no_action_needed` state describes handled/closed observations without claiming that
+the day had no signals. No observed finding plus gaps remains insufficient; no run
+never becomes a successful clean check. Luma 0.59 is required for the new state.
+
+Report-only source grouping consumes canonical before-midnight handling, native
+dismissal/redelivery audit events and prior-day source observations. It does not
+change policy evaluation, source episodes, severity or fault counts. Delivery
+acknowledgement is not physical clearance; a retired Repair is not automatically
+an outstanding hardware issue. Snooze validity includes its real expiry and undo.
+Source selection is bounded and cannot displace the leading positive finding with
+a routine notice or treat a gap as a physical failure. Private facts retain all
+quality limits; an optional observation note is displayed only in the detail sheet.
+
 ## Restart-safe notification handling
 
 The canonical journal holds startup-clearance guards for incident episodes that

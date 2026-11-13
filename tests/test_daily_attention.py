@@ -103,7 +103,8 @@ def test_observer_gap_reduces_duration_and_does_not_clear_episode(tmp_path):
     assert first["episodeId"] == current["episodeId"]
     journal.checkpoint(end + 1)
     result = daily_attention(journal, "home", DAY, ZONE)
-    assert result["assessment"] == "insufficient_data"
+    assert result["assessment"] == "attention_needed"
+    assert result["data_quality"] == "insufficient_data"
     assert result["episodes"][0]["confirmed_active_seconds"] == 23 * 3600
     assert result["episodes"][0]["episode_span_seconds"] == 24 * 3600
     assert result["episodes"][0]["close_reason"] is None

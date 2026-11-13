@@ -3,6 +3,7 @@
 import json
 from collections import Counter
 
+from . import attention_report, report_focus
 from .handling import handling_state
 from .models import daily_window, iso
 
@@ -163,6 +164,8 @@ def daily_attention(journal, policy, day, zone):
                 "evidence_status": row.get("status"),
                 "household_revision": body.get("household_revision"),
                 "handling_at_period_end": handling_state(db, episode["id"], end),
+                "period_end": end,
+                "source_snoozed_until": row.get("snoozedUntil"),
             }
         )
     handling_counts = dict(
@@ -224,6 +227,19 @@ def daily_attention(journal, policy, day, zone):
     prior = [r for r in versions if r["observed"] < start]
     if prior:
         relevant.insert(0, prior[-1])
+    attention_report.enrich_context(db, policy, details, start, end)
+    report_overview = attention_report.overview(report_focus.group_sources(details))
+    assessment = (
+        "not_run"
+        if quality == "not_run"
+        else "attention_needed"
+        if report_overview["sources_requiring_review"]
+        else "insufficient_data"
+        if quality != "complete" or len(episodes) > len(details)
+        else "no_action_needed"
+        if counts["issues"].get("episodes_present")
+        else "no_anomaly_found"
+    )
     return {
         "schema_version": 2,
         "scope": "canonical_attention_policy",
@@ -233,10 +249,10 @@ def daily_attention(journal, policy, day, zone):
         "start": iso(start),
         "end": iso(end),
         "data_quality": quality,
-        "assessment": quality
-        if quality != "complete"
-        else (
-            "attention_needed" if counts["issues"].get("episodes_present") else "no_anomaly_found"
+        "assessment": assessment,
+        "report_overview": report_overview,
+        "observation_scope": attention_report.observation_scope(
+            end - start, observed_seconds, covered_seconds, quality
         ),
         "coverage_seconds": covered_seconds,
         "observed_seconds": observed_seconds,

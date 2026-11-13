@@ -51,6 +51,17 @@ def record_suppression(journal, row, binding, now):
 def acknowledge(journal, notices, actor, now):
     with journal.db:
         for row, binding in notices:
+            journal._event(
+                "notification_user_dismissed",
+                now,
+                {
+                    "notification_id": row.source_id,
+                    "content_hash": content_hash(row),
+                    "actor": actor,
+                },
+            )
+            if binding is None:
+                continue
             journal.db.execute(
                 "INSERT OR REPLACE INTO notification_acknowledgements VALUES(?,?,?,?,?,?)",
                 (row.source_id, binding["entity"], binding["state"], content_hash(row), actor, now),
@@ -63,6 +74,7 @@ def acknowledge(journal, notices, actor, now):
                     "entity": binding["entity"],
                     "state": binding["state"],
                     "actor": actor,
+                    "content_hash": content_hash(row),
                 },
             )
 
@@ -132,12 +144,11 @@ class NotificationMemory:
         bindings = self.bindings
         for row in adapters.notifications(self.hass):
             binding = bindings.get(row.source_id)
-            if (
-                binding
-                and (service == "dismiss_all" or identifier == row.source_id)
-                and context(self.hass, binding) == binding["state"]
-            ):
-                intent = (row, binding, event.context.user_id)
+            if service == "dismiss_all" or identifier == row.source_id:
+                eligible = (
+                    binding if binding and context(self.hass, binding) == binding["state"] else None
+                )
+                intent = (row, eligible, event.context.user_id)
                 self.intents[row.source_id] = intent
                 self.hass.loop.call_soon(self.expire_intent, row.source_id, intent)
 

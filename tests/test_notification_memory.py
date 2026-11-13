@@ -104,6 +104,32 @@ async def test_real_clearance_resets_memory_and_unknown_does_not_hide_notices(ha
         await owner.async_close()
 
 
+async def test_unbound_explicit_dismiss_is_audited_without_suppressing_redelivery(hass):
+    owner = await setup(hass)
+    try:
+        persistent_notification.async_create(hass, "Check details", "Other", "other-notice")
+        await flush(hass, owner)
+        await hass.services.async_call(
+            "persistent_notification",
+            "dismiss",
+            {"notification_id": "other-notice"},
+            blocking=True,
+            context=Context(user_id="actual-user"),
+        )
+        await flush(hass, owner)
+        history = await owner.async_history()
+        assert any(
+            e["type"] == "notification_user_dismissed"
+            and e["body"]["notification_id"] == "other-notice"
+            for e in history["events"]
+        )
+        persistent_notification.async_create(hass, "Check details", "Other", "other-notice")
+        await flush(hass, owner)
+        assert any(r.source_id == "other-notice" for r in adapters.notifications(hass))
+    finally:
+        await owner.async_close()
+
+
 async def test_producer_removal_and_automation_dismissal_do_not_acknowledge(hass):
     owner = await setup(hass)
     try:
