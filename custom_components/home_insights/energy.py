@@ -12,7 +12,7 @@ import probatio as vol
 from homeassistant.helpers.storage import Store
 from homeassistant.util.unit_conversion import EnergyConverter
 
-from . import energy_forecast
+from . import energy_forecast, energy_planning
 from .models import daily_window, digest, iso
 
 METRICS = ("solar", "grid_import", "grid_export", "ev")
@@ -30,6 +30,27 @@ PROFILE_SCHEMA = vol.Schema(
             vol.Required(k): vol.Match(r"^sensor\.[a-z0-9_]+$") for k in METRICS
         },
         vol.Optional("solar_name"): vol.All(str, vol.Length(min=1, max=80)),
+        vol.Optional("charging_planning"): {
+            **{
+                vol.Required(k): vol.Match(r"^sensor\.[a-z0-9_]+$")
+                for k in (
+                    "forecast_entity",
+                    "remaining_entity",
+                    "peak_power_entity",
+                    "peak_time_entity",
+                    "updated_entity",
+                )
+            },
+            vol.Optional("minimum_charging_power_entity"): vol.Match(r"^sensor\.[a-z0-9_]+$"),
+            vol.Required("allow_grid_assist"): bool,
+            vol.Required("minimum_remaining_kwh"): vol.All(
+                vol.Coerce(float), vol.Range(min=0.1, max=1000)
+            ),
+            vol.Required("minimum_peak_kw"): vol.All(
+                vol.Coerce(float), vol.Range(min=0.1, max=1000)
+            ),
+            vol.Optional("maximum_age_hours", default=6): vol.All(int, vol.Range(min=1, max=12)),
+        },
         vol.Optional("solar_forecast"): {
             vol.Required("entity"): vol.Match(r"^sensor\.[a-z0-9_]+$"),
             vol.Optional("snapshot_time", default="06:00"): vol.Match(r"^([01]\d|2[0-3]):[0-5]\d$"),
@@ -56,6 +77,11 @@ def validate_profile(value):
         len(set(profile["metrics"].values())) != len(METRICS)
         or profile["minimum_baseline_days"] > profile["baseline_days"]
         or any(not math.isfinite(profile[k]) for k in ("deviation_percent", "deviation_kwh"))
+        or any(
+            not math.isfinite(v)
+            for k, v in profile.get("charging_planning", {}).items()
+            if k in ("minimum_remaining_kwh", "minimum_peak_kw")
+        )
     ):
         raise ValueError("Invalid energy profile")
     return profile
@@ -242,7 +268,7 @@ def compute_facts(profile, profile_id, day, zone, statistics, metadata, historie
             "hourly_statistics_are_not_device_uptime",
             "recovered_internal_counter_gaps_do_not_imply_lost_energy",
             "recent_days_are_not_weather_or_usage_normalized",
-            "no_solar_forecast_or_causal_diagnosis",
+            "forecast_is_independent_context_not_a_causal_diagnosis",
             "no_ev_solar_share_or_home_consumption_inferred",
             "no_claim_about_faults_outside_energy_measurements",
         ],
@@ -302,6 +328,10 @@ class EnergyReports:
             raise ValueError("Unknown energy profile")
         value = self.profiles[name]
         return {"profile_id": name, "profile_hash": digest(value), "profile": deepcopy(value)}
+
+    def planning(self, name, day, now):
+        config = self.get_profile(name)["profile"].get("charging_planning")
+        return energy_planning.collect(self.owner.hass, config, day, now) if config else None
 
     async def facts(self, name, day):
         from homeassistant.components.recorder import get_instance

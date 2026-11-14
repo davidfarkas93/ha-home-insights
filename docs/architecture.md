@@ -1,5 +1,21 @@
 # Architecture and migration
 
+## v0.14 separate same-day energy planning
+
+Only generation of the previous day's energy report can attach a current local-day
+forecast. A pure projection reads explicitly bound state snapshots, native units,
+provider freshness and target-day timestamps; it never controls charging or calculates
+unverified surplus, savings, vehicle need or solar share. The retrospective AI schema
+remains measured-source constrained. Conditional same-day advice is derived separately
+from explicit advisory thresholds and household permission for grid assistance.
+It does not change yesterday's assessment or any historical numeric fact.
+
+The journal persists `today_planning` facts and a separately dated `narrative.today`.
+Expiry is bounded by freshness, peak plus two hours and local midnight. Luma 0.61
+rechecks that window in HA's timezone before promoting the advice into a Today hero;
+details retain both periods and the saved forecast's limitations. A failed report
+still fails; unknown or expired planning never becomes an actionable all-clear.
+
 ## v0.13 operational report context
 
 Daily coverage remains conservative. Finding assessment is independent: positively

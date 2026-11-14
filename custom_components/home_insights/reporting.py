@@ -11,6 +11,7 @@ import probatio as vol
 
 from . import (
     attention_report,
+    energy_planning,
     energy_reporting,
     heating_reporting,
     nas_reporting,
@@ -456,6 +457,10 @@ class ReportManager:
                     if energy_profile is not None
                     else await self.owner.async_daily_facts(day, policy)
                 )
+                if energy_profile is not None:
+                    planning = self.owner.energy.planning(energy_profile, day, time.time())
+                    if planning is not None:
+                        facts = {**facts, "today_planning": planning}
                 bundle = evidence_bundle(facts)
                 facts = {
                     **facts,
@@ -501,6 +506,8 @@ class ReportManager:
                     skipped = False
                 if skipped and bundle.get("scope") == "nas_health" and bundle.get("since_midnight"):
                     narrative["summary_since_midnight"] = bundle["since_midnight"]["summary"]
+                if facts.get("today_planning"):
+                    narrative["today"] = energy_planning.narrative(facts["today_planning"])
                 facts["ai_evidence"] = [
                     e
                     for e in bundle["evidence"]

@@ -119,6 +119,44 @@ facts endpoint remains available; installing alone does not rewrite an automatio
 
 ## Energy morning reports (v0.5)
 
+### Today's charging opportunity (v0.14)
+
+An optional `charging_planning` energy-profile section adds a **separately dated**
+forecast snapshot when generating yesterday's report. Historical measured facts,
+their assessment, and the earlier fixed-cutoff forecast are not rewritten. Reads of
+historical energy facts do not collect today's planning data. Native HA still owns
+the daily trigger; this adds no scheduler, charging command, tool or credential.
+
+Required runtime sensor bindings: `forecast_entity` (daily energy), `remaining_entity`
+(remaining energy), `peak_power_entity`, `peak_time_entity` (aware timestamp), and
+`updated_entity` (provider's last successful poll timestamp). Optional
+`minimum_charging_power_entity` records the charger's reported minimum. All entity
+mappings stay in the HA profile. `allow_grid_assist` is an explicit household choice.
+`minimum_remaining_kwh` and `minimum_peak_kw` are required, configurable advisory
+thresholds; they do not establish net surplus, vehicle charging need or savings.
+`maximum_age_hours` defaults to six and is bounded to 1–12 hours.
+
+Missing/restored/invalid units, provider quality flags, wrong-day or stale/future data
+cannot produce an opportunity. Provider freshness and the component readings' day
+are checked separately. Gross forecast power below charger minimum can still support
+a conditional **grid-assisted timing** suggestion when permitted; it never certifies
+solar-only charging. Without grid permission, verified surplus would be required and
+this initial scope reports insufficient data instead of inventing it.
+
+`facts.today_planning` retains source-bound numbers and collection/expiry times;
+`narrative.today` retains the matching conditional advice. The native AI receives
+the facts without tools and still selects yesterday's measured interpretation.
+The forward-looking advice is rendered from the validated forecast rules, avoiding
+an optional AI selection silently omitting a useful opportunity. It expires at the
+earliest of provider freshness, two hours after forecast peak, and local midnight.
+Luma **0.61+** can show a valid opportunity as **Today** in the hero and the separate
+Today/Yesterday sections in details. Expired or unavailable advice falls back to the
+historical focus. No background forecast refresh is added by opening the details.
+
+Before downgrading below 0.14, remove `charging_planning` through the supported,
+hash-guarded profile API while the current code is loaded; older profile schemas do
+not accept the added field. Saved attempts and their original fact snapshots remain.
+
 Energy reports are an independent scope; they never combine energy measurements
 with attention episode counts. An administrator explicitly imports a profile with
 `home_insights.set_energy_profile` (`profile_id`, `profile`, optional `expected_hash`).

@@ -6,7 +6,7 @@ from .models import canonical
 
 def statement(metric):
     name = metric["name"].lower()
-    subject = ("Az " if name.startswith("a") else "A ") + name
+    subject = ("Az " if name[:1] in "aáeéiíoóöőuúüű" else "A ") + name
     if metric["status"] != "complete" or metric["value"] is None:
         return subject + " teljes napi összege nem igazolható."
     if metric["key"] == "ev":
@@ -119,6 +119,7 @@ def evidence_bundle(facts):
         "permitted_checks": checks,
         "summary_options": options,
         "limitations": facts["limitations"],
+        "today_planning": facts.get("today_planning"),
     }
 
 
